@@ -1,115 +1,73 @@
 <?php
 
-namespace App\Http\Controllers\API;
+namespace App\Models;
 
-use App\Models\Empleado;
-use App\Support\EnsureCatalogTables;
-use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens; // Añadir esta línea
 
-class EmpleadosController extends Controller
+class EmpleadosController extends Authenticatable
 {
-    // LISTAR TODOS LOS EMPLEADOS
-    public function index()
-    {
-        EnsureCatalogTables::ensure();
-       
-        return response()->json(Empleado::all(), 200);
-    }
+    use HasApiTokens, Notifiable; // Añadir HasApiTokens
 
-    // CREAR UN NUEVO EMPLEADO
-    public function store(Request $request)
+    protected $table = 'Empleados';
+    protected $primaryKey = 'id_empleados';
+    public $timestamps = false;
+
+    protected $fillable = [
+        'emp_nombre',
+        'emp_apaterno',
+        'emp_amaterno',
+        'emp_telefono',
+        'emp_correo',
+        'emp_direccion',
+        'emp_rol',
+        'emp_password',
+        'emp_estado',
+    ];
+
+    protected $hidden = [
+        'emp_password',
+    ];
+
+    protected $casts = [
+        'emp_rol' => 'string',
+        'emp_estado' => 'string',
+    ];
+
+    public function getNombreCompletoAttribute(): string
     {
-        EnsureCatalogTables::ensure();
-        $data = $request->all();
-        $data = $this->normalizarEmpleado($data);
+        $nombreCompleto = $this->emp_nombre . ' ' . $this->emp_apaterno;
         
-        // Encriptar la contraseña antes de guardar
-        if (isset($data['emp_password'])) {
-            $data['emp_password'] = Hash::make($data['emp_password']);
+        if ($this->emp_amaterno) {
+            $nombreCompleto .= ' ' . $this->emp_amaterno;
         }
-
-        $empleado = Empleado::create($data);
-
-        return response()->json([
-            'message' => 'Empleado registrado con éxito',
-            'data' => $empleado
-        ], 201);
+        
+        return $nombreCompleto;
     }
 
-    // MOSTRAR UN EMPLEADO POR ID
-    public function show($id)
+    public function isActivo(): bool
     {
-        return response()->json(
-            Empleado::findOrFail($id)
-        );
+        return $this->emp_estado === 'Activo';
     }
 
-    // ACTUALIZAR DATOS DEL EMPLEADO
-    public function update(Request $request, $id)
+    public function hasRole(string|array $roles): bool
     {
-        $empleado = Empleado::findOrFail($id);
-        $data = $request->all();
-        $data = $this->normalizarEmpleado($data);
-
-        // Si se envía una nueva contraseña, encriptarla
-        if (!empty($data['emp_password'])) {
-            $data['emp_password'] = Hash::make($data['emp_password']);
-        } else {
-            // Si no se envía contraseña, removerla del array para no sobreescribir con vacío
-            unset($data['emp_password']);
+        if (is_array($roles)) {
+            return in_array($this->emp_rol, $roles);
         }
-
-        $empleado->update($data);
-
-        return response()->json([
-            'message' => 'Datos del empleado actualizados correctamente',
-            'data' => $empleado
-        ], 200);
+        
+        return $this->emp_rol === $roles;
     }
 
-    // ELIMINAR O DAR DE BAJA
-    public function destroy($id)
+    public function scopeActivos($query)
     {
-      
-        Empleado::destroy($id);
-
-        return response()->json([
-            'message' => 'Empleado eliminado del sistema'
-        ], 200);
+        return $query->where('emp_estado', 'Activo');
     }
 
-    private function normalizarEmpleado(array $data): array
+    public function scopePorRol($query, string $rol)
     {
-        if (isset($data['emp_apellido_paterno']) && !isset($data['emp_apaterno'])) {
-            $data['emp_apaterno'] = $data['emp_apellido_paterno'];
-        }
-
-        if (isset($data['emp_apellido_materno']) && !isset($data['emp_amaterno'])) {
-            $data['emp_amaterno'] = $data['emp_apellido_materno'];
-        }
-
-        if (isset($data['emp_email']) && !isset($data['emp_usuario'])) {
-            $data['emp_usuario'] = $data['emp_email'];
-        }
-
-        if (isset($data['emp_correo']) && !isset($data['emp_usuario'])) {
-            $data['emp_usuario'] = $data['emp_correo'];
-        }
-
-        if (isset($data['tipo_usuario'])) {
-            $data['tipo_usuario'] = (int) $data['tipo_usuario'];
-        } else {
-            $data['tipo_usuario'] = stripos($data['emp_rol'] ?? '', 'admin') !== false ? 1 : 2;
-        }
-
-        if (isset($data['es_mecanico'])) {
-            $data['es_mecanico'] = filter_var($data['es_mecanico'], FILTER_VALIDATE_BOOLEAN);
-        }
-
-        unset($data['emp_apellido_paterno'], $data['emp_apellido_materno'], $data['emp_email'], $data['emp_correo']);
-
-        return $data;
+        return $query->where('emp_rol', $rol);
     }
 }
