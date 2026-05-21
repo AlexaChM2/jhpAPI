@@ -228,7 +228,7 @@ class EmpleadosController extends Controller
                 'required',
                 'email',
                 'max:100',
-                Rule::unique('Empleados', 'emp_correo')->ignore($id, 'id_empleados'),
+                Rule::unique('empleados', 'emp_correo')->ignore($id, 'id_empleados'),
             ],
             'emp_direccion' => 'nullable|string',
             'emp_rol' => 'required|in:Administrador,Vendedor,Mecanico',
