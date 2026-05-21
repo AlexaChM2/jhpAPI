@@ -6,15 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class Compras extends Model
 {
-   
     protected $table = 'compras';
-
-   
     protected $primaryKey = 'id_compra';
+    
+    public $timestamps = false;  // ← CAMBIAR A false
 
-    public $timestamps = true;
-
- 
     protected $fillable = [
         'id_proveedor',
         'id_empleado',
@@ -23,7 +19,6 @@ class Compras extends Model
         'com_factura_no',
     ];
 
-    
     public function proveedor()
     {
         return $this->belongsTo(Proveedor::class, 'id_proveedor', 'id_proveedor');

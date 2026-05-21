@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\Detalle_ventas;
-use App\Models\Ventas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -12,68 +10,115 @@ class VentasController extends Controller
 {
     public function index()
     {
-        return response()->json(Ventas::with(['cliente', 'empleado', 'caja', 'detalles.producto'])->get(), 200);
+        $ventas = DB::table('Ventas')
+            ->leftJoin('Clientes', 'Ventas.id_cliente', '=', 'Clientes.id_cliente')
+            ->select('Ventas.*', 'Clientes.cli_nombre', 'Clientes.cli_apaterno')
+            ->orderBy('Ventas.id_venta', 'desc')
+            ->get();
+
+        return response()->json($ventas, 200);
     }
 
     public function store(Request $request)
     {
-        return DB::transaction(function () use ($request) {
-            $detalles = $request->input('detalles', []);
+        $detalles = $request->input('detalles', []);
 
-            foreach ($detalles as $prod) {
-                InventarioController::descontarStock(
-                    (int) $prod['id_producto'],
-                    (int) ($prod['cantidad'] ?? $prod['det_cantidad'] ?? 0),
-                );
-            }
+        if (empty($detalles)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debe tener al menos un producto'
+            ], 422);
+        }
 
-            $venta = Ventas::create([
+        try {
+            DB::beginTransaction();
+
+            // Insertar venta
+            $idVenta = DB::table('Ventas')->insertGetId([
                 'id_cliente'  => $request->id_cliente,
                 'id_empleado' => $request->id_empleado ?? 1,
                 'id_caja'     => $request->id_caja ?? 1,
                 'ven_total'   => $request->ven_total,
-                'tipo_pago'   => $request->tipo_pago,
-                'ven_fecha'   => now(),
+                'tipo_pago'   => $request->tipo_pago ?? 'Efectivo',
+                'ven_fecha'   => now()->format('Y-m-d H:i:s'),
             ]);
 
-            foreach ($detalles as $prod) {
-                Detalle_ventas::create([
-                    'id_venta' => $venta->id_venta,
-                    'id_producto' => $prod['id_producto'],
-                    'det_cantidad' => $prod['cantidad'] ?? $prod['det_cantidad'],
-                    'det_precio_unitario' => $prod['precio'] ?? $prod['det_precio_unitario'],
+            // Insertar detalles
+            foreach ($detalles as $item) {
+                DB::table('Detalle_Ventas')->insert([
+                    'id_venta'            => $idVenta,
+                    'id_producto'         => $item['id_producto'],
+                    'det_cantidad'        => $item['cantidad'] ?? 1,
+                    'det_precio_unitario' => $item['precio'] ?? 0,
                 ]);
             }
 
+            DB::commit();
+
             return response()->json([
-                'message' => 'Venta registrada con exito',
-                'id_venta' => $venta->id_venta,
+                'success' => true,
+                'message' => 'Venta registrada con éxito',
+                'id_venta' => $idVenta
             ], 201);
-        });
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function show($id)
     {
-        return response()->json(Ventas::with(['cliente', 'empleado', 'caja', 'detalles.producto'])->findOrFail($id), 200);
+        $venta = DB::table('Ventas')->where('id_venta', $id)->first();
+        
+        if (!$venta) {
+            return response()->json(['success' => false, 'message' => 'No encontrada'], 404);
+        }
+
+        $detalles = DB::table('Detalle_Ventas')
+            ->leftJoin('Producto', 'Detalle_Ventas.id_producto', '=', 'Producto.id_producto')
+            ->where('Detalle_Ventas.id_venta', $id)
+            ->select('Detalle_Ventas.*', 'Producto.pro_nombre')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id_venta' => $venta->id_venta,
+                'ven_fecha' => $venta->ven_fecha,
+                'ven_total' => $venta->ven_total,
+                'tipo_pago' => $venta->tipo_pago,
+                'cliente' => ['cli_nombre' => $venta->cli_nombre],
+                'detalles' => $detalles
+            ]
+        ], 200);
     }
 
     public function update(Request $request, $id)
     {
-        $venta = Ventas::findOrFail($id);
-        $venta->update($request->all());
+        DB::table('Ventas')->where('id_venta', $id)->update([
+            'ven_total' => $request->ven_total,
+            'tipo_pago' => $request->tipo_pago,
+        ]);
 
         return response()->json([
-            'message' => 'Venta actualizada correctamente',
-            'data' => $venta,
+            'success' => true,
+            'message' => 'Venta actualizada'
         ], 200);
     }
 
     public function destroy($id)
     {
-        $venta = Ventas::findOrFail($id);
-        $venta->detalles()->delete();
-        $venta->delete();
+        DB::table('Detalle_Ventas')->where('id_venta', $id)->delete();
+        DB::table('Ventas')->where('id_venta', $id)->delete();
 
-        return response()->json(['message' => 'Venta eliminada con exito'], 200);
+        return response()->json([
+            'success' => true,
+            'message' => 'Venta eliminada'
+        ], 200);
     }
 }

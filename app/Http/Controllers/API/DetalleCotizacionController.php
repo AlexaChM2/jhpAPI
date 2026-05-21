@@ -2,56 +2,134 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Models\Detalle_Cotizaciones;
+use App\Models\Detalle_cotizaciones;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Validator;
 
 class DetalleCotizacionController extends Controller
 {
-    // 
+    /**
+     * Listar todos los detalles de cotizaciones.
+     */
     public function index()
     {
-        $detalles = Detalle_Cotizaciones::with(['producto', 'servicio'])->get();
-        return response()->json($detalles, 200);
-    }
-
-    // Agregar una línea  a la cotización
-    public function store(Request $request)
-    {
-        $detalle = Detalle_Cotizaciones::create($request->all());
+        $detalles = Detalle_cotizaciones::with(['cotizacion', 'producto'])->get();
 
         return response()->json([
-            'message' => 'Línea agregada a la cotización',
-            'data' => $detalle
+            'success' => true,
+            'data' => $detalles
+        ], 200);
+    }
+
+    /**
+     * Crear un detalle de cotización.
+     */
+    public function store(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'id_cotizacion' => 'required|exists:cotizaciones,id_cotizacion',
+            'id_producto' => 'required|exists:Producto,id_producto',
+            'det_cantidad' => 'required|integer|min:1',
+            'det_precio_unitario' => 'required|numeric|min:0',
+        ], [
+            'id_cotizacion.required' => 'La cotización es obligatoria',
+            'id_producto.required' => 'El producto es obligatorio',
+            'det_cantidad.min' => 'La cantidad debe ser mayor a 0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $detalle = Detalle_cotizaciones::create($request->all());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Detalle agregado exitosamente',
+            'data' => $detalle->load(['cotizacion', 'producto'])
         ], 201);
     }
 
-    // Mostrar una línea específica
+    /**
+     * Mostrar un detalle específico.
+     */
     public function show($id)
     {
-        $detalle = Detalle_Cotizaciones::with(['producto', 'servicio'])->findOrFail($id);
-        return response()->json($detalle, 200);
-    }
+        $detalle = Detalle_cotizaciones::with(['cotizacion', 'producto'])->find($id);
 
-    // Actualizar cantidad o precio de la línea
-    public function update(Request $request, $id)
-    {
-        $detalle = Detalle_Cotizaciones::findOrFail($id);
-        $detalle->update($request->all());
+        if (!$detalle) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Detalle no encontrado'
+            ], 404);
+        }
 
         return response()->json([
-            'message' => 'Detalle de cotización actualizado',
+            'success' => true,
             'data' => $detalle
         ], 200);
     }
 
-    // Eliminar la línea de la cotización
-    public function destroy($id)
+    /**
+     * Actualizar un detalle.
+     */
+    public function update(Request $request, $id)
     {
-        Detalle_Cotizaciones::destroy($id);
+        $detalle = Detalle_cotizaciones::find($id);
+
+        if (!$detalle) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Detalle no encontrado'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'det_cantidad' => 'sometimes|integer|min:1',
+            'det_precio_unitario' => 'sometimes|numeric|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $detalle->update($request->all());
 
         return response()->json([
-            'message' => 'Línea eliminada de la cotización'
+            'success' => true,
+            'message' => 'Detalle actualizado correctamente',
+            'data' => $detalle->fresh(['cotizacion', 'producto'])
+        ], 200);
+    }
+
+    /**
+     * Eliminar un detalle.
+     */
+    public function destroy($id)
+    {
+        $detalle = Detalle_cotizaciones::find($id);
+
+        if (!$detalle) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Detalle no encontrado'
+            ], 404);
+        }
+
+        $detalle->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Detalle eliminado correctamente'
         ], 200);
     }
 }

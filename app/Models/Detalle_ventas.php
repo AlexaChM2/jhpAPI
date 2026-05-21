@@ -9,17 +9,21 @@ class Detalle_ventas extends Model
     /**
      * Tabla del modelo.
      */
-    protected $table = 'detalle_ventas';
+    protected $table = 'Detalle_Ventas';  // ← Coincide con tu CREATE TABLE
 
     /**
      * Clave primaria.
      */
-    protected $primaryKey = 'id_detalle';
+    protected $primaryKey = 'id_detalle';  // ← Coincide con tu tabla
 
-    
-    public $timestamps = true;
+    /**
+     * SIN timestamps - CORREGIDO (antes estaba true)
+     */
+    public $timestamps = false;  // ← ESTE ERA EL ERROR
 
-   
+    /**
+     * Campos asignables.
+     */
     protected $fillable = [
         'id_venta',
         'id_producto',
@@ -28,13 +32,18 @@ class Detalle_ventas extends Model
     ];
 
     /**
-     * Relaciones
+     * Relación con Venta.
      */
-    public function venta() {
+    public function venta()
+    {
         return $this->belongsTo(Ventas::class, 'id_venta', 'id_venta');
     }
 
-    public function producto() {
+    /**
+     * Relación con Producto.
+     */
+    public function producto()
+    {
         return $this->belongsTo(Producto::class, 'id_producto', 'id_producto');
     }
 }

@@ -4,88 +4,214 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Producto;
-use App\Support\EnsureCatalogTables;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class ProductoController extends Controller
 {
-    public function index()
+    /**
+     * Listar todos los productos
+     */
+    public function index(Request $request)
     {
-        EnsureCatalogTables::ensure();
+        $query = Producto::with(['categoria', 'proveedor']);
 
-        return response()->json(Producto::with(['categoria', 'proveedor'])->get(), 200);
-    }
+        // Filtro por búsqueda
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('pro_codigo', 'LIKE', "%{$search}%")
+                  ->orWhere('pro_nombre', 'LIKE', "%{$search}%")
+                  ->orWhere('pro_marca', 'LIKE', "%{$search}%")
+                  ->orWhere('pro_tipo', 'LIKE', "%{$search}%");
+            });
+        }
 
-    public function store(Request $request)
-    {
-        EnsureCatalogTables::ensure();
-        $producto = Producto::create($this->normalizarProducto($request->all()));
-        $this->syncInventario($producto, (int) $producto->pro_stock);
+        // Filtro por categoría
+        if ($request->has('categoria') && $request->categoria != '') {
+            $query->where('id_categoria', $request->categoria);
+        }
+
+        // Filtro por proveedor
+        if ($request->has('proveedor') && $request->proveedor != '') {
+            $query->where('id_proveedor', $request->proveedor);
+        }
+
+        $productos = $query->orderBy('pro_nombre')
+                           ->paginate($request->per_page ?? 15);
 
         return response()->json([
-            'message' => 'Producto registrado exitosamente',
-            'data' => $producto->fresh(['categoria', 'proveedor']),
-        ], 201);
-    }
-
-    public function show($id)
-    {
-        return response()->json(Producto::with(['categoria', 'proveedor'])->findOrFail($id), 200);
-    }
-
-    public function update(Request $request, $id)
-    {
-        $producto = Producto::findOrFail($id);
-        $producto->update($this->normalizarProducto($request->all()));
-        $this->syncInventario($producto, 0);
-
-        return response()->json([
-            'message' => 'Producto actualizado correctamente',
-            'data' => $producto->fresh(['categoria', 'proveedor']),
+            'success' => true,
+            'data' => $productos->items(),
+            'pagination' => [
+                'total' => $productos->total(),
+                'per_page' => $productos->perPage(),
+                'current_page' => $productos->currentPage(),
+                'last_page' => $productos->lastPage(),
+                'from' => $productos->firstItem(),
+                'to' => $productos->lastItem()
+            ]
         ], 200);
     }
 
+    /**
+     * Crear nuevo producto
+     */
+    public function store(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'pro_codigo' => 'required|string|max:50|unique:Producto,pro_codigo',
+            'pro_nombre' => 'required|string|max:100',
+            'pro_tipo' => 'nullable|string|max:50',
+            'pro_marca' => 'nullable|string|max:50',
+            'pro_descripcion' => 'nullable|string',
+            'pro_precio_venta' => 'required|numeric|min:0',
+            'pro_stock' => 'nullable|integer|min:0',
+            'id_categoria' => 'nullable|exists:Categorias,id_categoria',
+            'id_proveedor' => 'nullable|exists:Proveedores,id_proveedor',
+        ], [
+            'pro_codigo.required' => 'El código del producto es obligatorio',
+            'pro_codigo.unique' => 'Este código ya existe',
+            'pro_nombre.required' => 'El nombre del producto es obligatorio',
+            'pro_precio_venta.required' => 'El precio de venta es obligatorio',
+            'pro_precio_venta.numeric' => 'El precio debe ser un número',
+            'id_categoria.exists' => 'La categoría seleccionada no existe',
+            'id_proveedor.exists' => 'El proveedor seleccionado no existe',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $producto = Producto::create($request->all());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Producto registrado exitosamente',
+            'data' => $producto->load(['categoria', 'proveedor'])
+        ], 201);
+    }
+
+    /**
+     * Mostrar un producto específico
+     */
+    public function show($id)
+    {
+        $producto = Producto::with(['categoria', 'proveedor'])->find($id);
+        
+        if (!$producto) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Producto no encontrado'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $producto
+        ], 200);
+    }
+
+    /**
+     * Actualizar producto
+     */
+    public function update(Request $request, $id)
+    {
+        $producto = Producto::find($id);
+        
+        if (!$producto) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Producto no encontrado'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'pro_codigo' => [
+                'sometimes',
+                'string',
+                'max:50',
+                Rule::unique('Producto', 'pro_codigo')->ignore($id, 'id_producto'),
+            ],
+            'pro_nombre' => 'sometimes|string|max:100',
+            'pro_tipo' => 'nullable|string|max:50',
+            'pro_marca' => 'nullable|string|max:50',
+            'pro_descripcion' => 'nullable|string',
+            'pro_precio_venta' => 'sometimes|numeric|min:0',
+            'pro_stock' => 'nullable|integer|min:0',
+            'id_categoria' => 'nullable|exists:Categorias,id_categoria',
+            'id_proveedor' => 'nullable|exists:Proveedores,id_proveedor',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $producto->update($request->all());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Producto actualizado correctamente',
+            'data' => $producto->fresh(['categoria', 'proveedor'])
+        ], 200);
+    }
+
+    /**
+     * Eliminar producto
+     */
     public function destroy($id)
     {
-        Producto::destroy($id);
+        $producto = Producto::find($id);
+        
+        if (!$producto) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Producto no encontrado'
+            ], 404);
+        }
 
-        return response()->json(['message' => 'Producto eliminado del inventario'], 200);
+        $producto->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Producto eliminado del inventario'
+        ], 200);
     }
 
-    private function normalizarProducto(array $data): array
+    /**
+     * Buscar productos por código o nombre
+     */
+    public function search(Request $request)
     {
-        $precio = (float) ($data['pro_precio_venta'] ?? $data['prod_precio'] ?? 0);
-        $iva = (float) ($data['pro_iva'] ?? $data['prod_iva'] ?? $data['iva'] ?? 0);
+        $search = $request->get('q');
+        
+        if (!$search) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Término de búsqueda requerido'
+            ], 422);
+        }
 
-        return [
-            'pro_codigo' => $data['pro_codigo'] ?? $data['prod_codigo'] ?? null,
-            'pro_nombre' => $data['pro_nombre'] ?? $data['prod_nombre'] ?? null,
-            'pro_tipo' => $data['pro_tipo'] ?? $data['prod_tipo'] ?? null,
-            'pro_marca' => $data['pro_marca'] ?? $data['prod_marca'] ?? null,
-            'pro_descripcion' => $data['pro_descripcion'] ?? $data['prod_descripcion'] ?? null,
-            'pro_precio_venta' => $precio,
-            'pro_iva' => $iva,
-            'pro_stock' => $data['pro_stock'] ?? $data['prod_stock'] ?? 0,
-            'pro_categoria' => $data['pro_categoria'] ?? $data['prod_categoria'] ?? null,
-            'pro_proveedor' => $data['pro_proveedor'] ?? $data['prod_proveedor'] ?? null,
-            'id_categoria' => $data['id_categoria'] ?? null,
-            'id_proveedor' => $data['id_proveedor'] ?? null,
-        ];
-    }
+        $productos = Producto::with(['categoria', 'proveedor'])
+            ->where('pro_codigo', 'LIKE', "%{$search}%")
+            ->orWhere('pro_nombre', 'LIKE', "%{$search}%")
+            ->orWhere('pro_marca', 'LIKE', "%{$search}%")
+            ->limit(20)
+            ->get();
 
-    private function syncInventario(Producto $producto, int $cantidad): void
-    {
-        InventarioController::sumarOActualizar([
-            'id_producto' => $producto->id_producto,
-            'codigo_producto' => $producto->pro_codigo,
-            'nombre_producto' => $producto->pro_nombre,
-            'marca' => $producto->pro_marca,
-            'categoria' => $producto->pro_categoria,
-            'stock' => $cantidad,
-            'precio_unitario' => (float) $producto->pro_precio_venta,
-            'iva' => (float) ($producto->pro_iva ?? 0),
-            'id_proveedor' => $producto->id_proveedor,
-            'proveedor' => $producto->pro_proveedor,
+        return response()->json([
+            'success' => true,
+            'data' => $productos,
+            'total' => $productos->count()
         ]);
     }
 }

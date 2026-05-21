@@ -6,20 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class Ventas extends Model
 {
-    /**
-     * Tabla del modelo.
-     */
-    protected $table = 'ventas';
-
-    /**
-     * Clave primaria.
-     */
+    protected $table = 'Ventas';  // ← Coincide con tu tabla
     protected $primaryKey = 'id_venta';
+    public $timestamps = false;  // ← Si tu tabla no tiene created_at/updated_at
 
-   
-    public $timestamps = true;
-
-    
     protected $fillable = [
         'id_cliente',
         'id_empleado',
@@ -29,22 +19,23 @@ class Ventas extends Model
         'tipo_pago',
     ];
 
-    /**
-     * Relaciones
-     */
-    public function cliente() {
+    public function cliente()
+    {
         return $this->belongsTo(Cliente::class, 'id_cliente', 'id_cliente');
     }
 
-    public function empleado() {
+    public function empleado()
+    {
         return $this->belongsTo(Empleado::class, 'id_empleado', 'id_empleados');
     }
 
-    public function caja() {
+    public function caja()
+    {
         return $this->belongsTo(Control_caja::class, 'id_caja', 'id_caja');
     }
 
-    public function detalles() {
+    public function detalles()
+    {
         return $this->hasMany(Detalle_ventas::class, 'id_venta', 'id_venta');
     }
 }

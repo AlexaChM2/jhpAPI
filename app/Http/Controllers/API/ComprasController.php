@@ -4,65 +4,115 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Compras;
+use App\Models\Detalle_compras;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ComprasController extends Controller
 {
     public function index()
     {
-        return response()->json(Compras::with(['proveedor', 'empleado', 'detalles'])->get(), 200);
+        return response()->json(
+            Compras::with(['proveedor', 'empleado', 'detalles.producto'])
+                ->orderBy('id_compra', 'desc')
+                ->get(),
+            200
+        );
     }
 
     public function store(Request $request)
     {
-        $compra = Compras::create($request->all());
-        $items = $request->input('detalles', $request->input('productos', []));
+        try {
+            DB::beginTransaction();
 
-        if (empty($items) && ($request->filled('codigo_producto') || $request->filled('productCode'))) {
-            $items = [[
-                'codigo_producto' => $request->input('codigo_producto', $request->input('productCode')),
-                'nombre_producto' => $request->input('nombre_producto', $request->input('productName')),
-                'marca' => $request->input('marca', $request->input('brand')),
-                'categoria' => $request->input('categoria'),
-                'stock' => $request->input('cantidad', $request->input('quantity', 0)),
-                'precio_unitario' => $request->input('precio_unitario', $request->input('unitCost', 0)),
-                'iva' => $request->input('iva', 0),
-                'proveedor' => $request->input('proveedor', $request->input('provider')),
-                'id_proveedor' => $request->input('id_proveedor'),
-                'id_producto' => $request->input('id_producto'),
-            ]];
+            // Crear la compra
+            $compra = Compras::create([
+                'id_proveedor'   => $request->id_proveedor,
+                'id_empleado'    => $request->id_empleado ?? 1,
+                'com_fecha'      => now(),
+                'com_total'      => $request->com_total ?? 0,
+                'com_factura_no' => $request->com_factura_no,
+            ]);
+
+            // Crear detalles
+            $detalles = $request->input('detalles', []);
+            foreach ($detalles as $item) {
+                Detalle_compras::create([
+                    'id_compra'          => $compra->id_compra,
+                    'id_producto'        => $item['id_producto'],
+                    'det_cantidad'       => $item['det_cantidad'] ?? $item['cantidad'] ?? 1,
+                    'det_costo_unitario' => $item['det_costo_unitario'] ?? $item['costo'] ?? 0,
+                ]);
+
+                // Actualizar stock del producto
+                if (isset($item['id_producto'])) {
+                    DB::table('Producto')
+                        ->where('id_producto', $item['id_producto'])
+                        ->increment('pro_stock', $item['det_cantidad'] ?? $item['cantidad'] ?? 1);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Compra registrada correctamente',
+                'data' => $compra->load(['proveedor', 'detalles.producto'])
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
         }
-
-        foreach ($items as $item) {
-            InventarioController::sumarOActualizar($item);
-        }
-
-        return response()->json([
-            'message' => 'Compra registrada correctamente',
-            'data' => $compra,
-        ], 201);
     }
 
     public function show($id)
     {
-        return response()->json(Compras::with(['proveedor', 'empleado', 'detalles'])->findOrFail($id), 200);
+        $compra = Compras::with(['proveedor', 'empleado', 'detalles.producto'])->find($id);
+        
+        if (!$compra) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Compra no encontrada'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $compra
+        ], 200);
     }
 
     public function update(Request $request, $id)
     {
         $compra = Compras::findOrFail($id);
-        $compra->update($request->all());
+        $compra->update($request->only(['com_total', 'com_factura_no', 'id_proveedor']));
 
         return response()->json([
-            'message' => 'Informacion de la compra actualizada',
-            'data' => $compra,
+            'success' => true,
+            'message' => 'Compra actualizada',
+            'data' => $compra
         ], 200);
     }
 
     public function destroy($id)
     {
-        Compras::destroy($id);
+        $compra = Compras::find($id);
+        
+        if (!$compra) {
+            return response()->json(['success' => false, 'message' => 'No encontrada'], 404);
+        }
 
-        return response()->json(['message' => 'Registro de compra eliminado'], 200);
+        Detalle_compras::where('id_compra', $id)->delete();
+        $compra->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Compra eliminada'
+        ], 200);
     }
 }

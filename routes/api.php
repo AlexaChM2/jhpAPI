@@ -85,6 +85,7 @@ Route::get('control_caja/estado', [Control_cajaController::class, 'consultarEsta
 Route::apiResource('control_caja', Control_cajaController::class);
 
 Route::apiResource('cotizaciones', CotizacionesController::class);
+Route::apiResource('detalle_cotizaciones', DetalleCotizacionController::class);
 
 Route::apiResource('detalle_cita_servicios', Detalle_cita_serviciosController::class);
 Route::apiResource('detalle_compras', Detalle_comprasController::class);
@@ -96,6 +97,9 @@ Route::apiResource('empleados', EmpleadosController::class);
 Route::apiResource('mantenimiento', MantenimientoController::class);
 
 Route::apiResource('producto', ProductoController::class);
+
+
+
 Route::apiResource('inventario', InventarioController::class);
 Route::apiResource('inventarios', InventarioController::class);
 Route::apiResource('proveedores', ProveedoresController::class);
