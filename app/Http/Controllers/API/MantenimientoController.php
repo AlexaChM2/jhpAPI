@@ -12,7 +12,7 @@ class MantenimientoController extends Controller
     public function index()
     {
         // Cargamos todas las relaciones para ver quién es el cliente, el mecánico y qué insumos se usaron
-        $mantenimientos = Mantenimiento::with(['cliente', 'mecanico', 'cita', 'insumos'])->get();
+        $mantenimientos = mantenimiento::with(['cliente', 'mecanico', 'cita', 'insumos'])->get();
         return response()->json($mantenimientos, 200);
     }
 
