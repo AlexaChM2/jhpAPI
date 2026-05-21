@@ -21,7 +21,8 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-        env('FRONTEND_URL', 'https://jhp-frontend-production.up.railway.app/'),
+        env('FRONTEND_URL', 'http://localhost:8000'),
+        //env('FRONTEND_URL', 'https://jhp-frontend-production.up.railway.app/'),
         'http://localhost:8081',
         'http://127.0.0.1:8081',
         'http://localhost:19006',
