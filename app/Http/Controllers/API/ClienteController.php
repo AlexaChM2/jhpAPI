@@ -63,7 +63,7 @@ class ClienteController extends Controller
             'cli_apaterno' => 'required|string|max:50',
             'cli_amaterno' => 'nullable|string|max:50',
             'cli_telefono' => 'nullable|string|max:15',
-            'cli_correo' => 'required|email|unique:Clientes,cli_correo',
+            'cli_correo' => 'required|email|unique:clientes,cli_correo',
             'cli_direccion' => 'nullable|string',
             'cli_password' => 'required|string|min:6|confirmed',
         ], [
@@ -139,7 +139,7 @@ class ClienteController extends Controller
             'cli_correo' => [
                 'sometimes',
                 'email',
-                Rule::unique('Clientes', 'cli_correo')->ignore($id, 'id_cliente'),
+                Rule::unique('clientes', 'cli_correo')->ignore($id, 'id_cliente'),
             ],
             'cli_direccion' => 'nullable|string',
             'cli_password' => 'nullable|string|min:6|confirmed',
