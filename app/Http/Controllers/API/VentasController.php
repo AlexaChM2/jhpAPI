@@ -10,7 +10,7 @@ class VentasController extends Controller
 {
     public function index()
     {
-        $ventas = DB::table('Ventas')
+        $ventas = DB::table('ventas')
             ->leftJoin('Clientes', 'Ventas.id_cliente', '=', 'Clientes.id_cliente')
             ->select('Ventas.*', 'Clientes.cli_nombre', 'Clientes.cli_apaterno')
             ->orderBy('Ventas.id_venta', 'desc')
@@ -34,7 +34,7 @@ class VentasController extends Controller
             DB::beginTransaction();
 
             // Insertar venta
-            $idVenta = DB::table('Ventas')->insertGetId([
+            $idVenta = DB::table('ventas')->insertGetId([
                 'id_cliente'  => $request->id_cliente,
                 'id_empleado' => $request->id_empleado ?? 1,
                 'id_caja'     => $request->id_caja ?? 1,
@@ -45,7 +45,7 @@ class VentasController extends Controller
 
             // Insertar detalles
             foreach ($detalles as $item) {
-                DB::table('Detalle_Ventas')->insert([
+                DB::table('detalle_ventas')->insert([
                     'id_venta'            => $idVenta,
                     'id_producto'         => $item['id_producto'],
                     'det_cantidad'        => $item['cantidad'] ?? 1,
@@ -74,7 +74,7 @@ class VentasController extends Controller
     public function show($id)
 {
     // Agregar el JOIN con Clientes
-    $venta = DB::table('Ventas')
+    $venta = DB::table('ventas')
         ->leftJoin('Clientes', 'Ventas.id_cliente', '=', 'Clientes.id_cliente')
         ->where('Ventas.id_venta', $id)
         ->select('Ventas.*', 'Clientes.cli_nombre', 'Clientes.cli_apaterno')
@@ -87,7 +87,7 @@ class VentasController extends Controller
         ], 404);
     }
 
-    $detalles = DB::table('Detalle_Ventas')
+    $detalles = DB::table('detalle_ventas')
         ->leftJoin('Producto', 'Detalle_Ventas.id_producto', '=', 'Producto.id_producto')
         ->where('Detalle_Ventas.id_venta', $id)
         ->select(
@@ -114,7 +114,7 @@ class VentasController extends Controller
 }
     public function update(Request $request, $id)
     {
-        DB::table('Ventas')->where('id_venta', $id)->update([
+        DB::table('ventas')->where('id_venta', $id)->update([
             'ven_total' => $request->ven_total,
             'tipo_pago' => $request->tipo_pago,
         ]);
@@ -127,8 +127,8 @@ class VentasController extends Controller
 
     public function destroy($id)
     {
-        DB::table('Detalle_Ventas')->where('id_venta', $id)->delete();
-        DB::table('Ventas')->where('id_venta', $id)->delete();
+        DB::table('detalle_ventas')->where('id_venta', $id)->delete();
+        DB::table('ventas')->where('id_venta', $id)->delete();
 
         return response()->json([
             'success' => true,
