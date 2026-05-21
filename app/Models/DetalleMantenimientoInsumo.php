@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Detalle_mantenimiento_insumos extends Model
+class DetalleMantenimientoInsumo extends Model
 {
     /**
      * Tabla del modelo.
