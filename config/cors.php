@@ -20,14 +20,15 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        env('FRONTEND_URL', 'http://localhost:8000'),
-        //env('FRONTEND_URL', 'https://jhp-frontend-production.up.railway.app/'),
-        'http://localhost:8081',
-        'http://127.0.0.1:8081',
-        'http://localhost:19006',
-        'http://127.0.0.1:19006',
-    ],
+    ##'allowed_origins' => [
+    ##    env('FRONTEND_URL', 'http://localhost:8081'),
+     ##   'http://localhost:8081',
+     ##   'http://127.0.0.1:8081',
+     ##   'http://localhost:19006',
+    ##    'http://127.0.0.1:19006',
+    ##],
+    
+    'allowed_origins' => ['*'],
 
     'allowed_origins_patterns' => [
         '#^http://localhost(:[0-9]+)?$#',
