@@ -9,7 +9,7 @@ class Detalle_mantenimiento_servicios extends Model
     /**
      * Tabla del modelo.
      */
-    protected $table = 'detalle_Mantenimiento_Servicios';
+    protected $table = 'detalle_mantenimiento_servicios';
 
     /**
      * Clave primaria.
