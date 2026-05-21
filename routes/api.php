@@ -1,6 +1,7 @@
 <?php
 
 
+use App\Http\Controllers\API\ClimaController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\CategoriasController;
 use App\Http\Controllers\API\CitasController;
@@ -25,6 +26,7 @@ use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\PasswordResetController;
 use App\Http\Controllers\API\UsuarioController;
 use App\Http\Controllers\API\InventarioController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -62,11 +64,7 @@ Route::prefix('password-reset')->group(function () {
     Route::post('change', [PasswordResetController::class, 'changePassword'])->middleware('auth:sanctum');
 });
 
-/*
-|--------------------------------------------------------------------------
-| Rutas de Usuarios (Protegidas)
-|--------------------------------------------------------------------------
-*/
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('usuarios', UsuarioController::class);
     Route::patch('usuarios/{id}/estado', [UsuarioController::class, 'cambiarEstado']);
@@ -77,10 +75,7 @@ Route::apiResource('clientes', ClienteController::class);
 
 Route::apiResource('compras', ComprasController::class);
 
-// RUTAS DE CONTROL CAJA
-// Primero la ruta de consulta 
 
-// Luego el recurso general
 Route::get('control_caja/estado', [Control_cajaController::class, 'consultarEstado']);
 Route::apiResource('control_caja', Control_cajaController::class);
 
@@ -104,6 +99,22 @@ Route::apiResource('inventario', InventarioController::class);
 Route::apiResource('inventarios', InventarioController::class);
 Route::apiResource('proveedores', ProveedoresController::class);
 Route::apiResource('categorias', CategoriasController::class);
+
+Route::prefix('clima')->group(function () {
+   
+    Route::get('/', function () {
+        return response()->json([
+            'endpoints' => [
+                'actual' => url('/api/clima/actual'),
+                'pronostico' => url('/api/clima/pronostico'),
+            ],
+            'mensaje' => 'Usa /api/clima/actual o /api/clima/pronostico'
+        ]);
+    });
+    
+    Route::get('/actual', [ClimaController::class, 'actual']);
+    Route::get('/pronostico', [ClimaController::class, 'pronostico']);
+});
 
 Route::apiResource('servicios', ServiciosController::class);
 Route::apiResource('ventas',VentasController::class);
