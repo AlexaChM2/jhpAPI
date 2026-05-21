@@ -11,9 +11,9 @@ class VentasController extends Controller
     public function index()
     {
         $ventas = DB::table('ventas')
-            ->leftJoin('Clientes', 'Ventas.id_cliente', '=', 'Clientes.id_cliente')
-            ->select('Ventas.*', 'Clientes.cli_nombre', 'Clientes.cli_apaterno')
-            ->orderBy('Ventas.id_venta', 'desc')
+            ->leftJoin('clientes', 'ventas.id_cliente', '=', 'clientes.id_cliente')
+            ->select('ventas.*', 'clientes.cli_nombre', 'clientes.cli_apaterno')
+            ->orderBy('ventas.id_venta', 'desc')
             ->get();
 
         return response()->json($ventas, 200);
