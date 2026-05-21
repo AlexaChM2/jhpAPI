@@ -9,7 +9,7 @@ class Detalle_cita_servicios extends Model
     /**
      * Tabla del modelo.
      */
-    protected $table = 'Detalle_Cita_Servicios';
+    protected $table = 'detalle_Cita_Servicios';
 
   
     protected $primaryKey = 'id_det_cita';

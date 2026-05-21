@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Cotizaciones extends Model
 {
-    protected $table = 'Cotizaciones';  // ← Coincide con la tabla
+    protected $table = 'cotizaciones';  // ← Coincide con la tabla
     protected $primaryKey = 'id_cotizacion';
     public $timestamps = true;  // ← Ahora sí tiene timestamps
 

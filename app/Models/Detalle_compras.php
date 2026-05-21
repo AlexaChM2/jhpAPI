@@ -9,7 +9,7 @@ class Detalle_compras extends Model
     /**
      * Tabla del modelo.
      */
-    protected $table = 'Detalle_Compras';
+    protected $table = 'detalle_Compras';
 
   
     protected $primaryKey = 'id_det_compra';

@@ -10,7 +10,7 @@ class Empleados extends Authenticatable
 {
     use HasApiTokens, Notifiable;
 
-    protected $table = 'Empleados';
+    protected $table = 'empleados';
     protected $primaryKey = 'id_empleados';
     public $timestamps = false;
 

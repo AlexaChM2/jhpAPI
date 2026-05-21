@@ -9,7 +9,7 @@ class Producto extends Model
     /**
      * Tabla del modelo.
      */
-    protected $table = 'Producto';  // Coincide con tu CREATE TABLE
+    protected $table = 'producto';  // Coincide con tu CREATE TABLE
 
     /**
      * Clave primaria.

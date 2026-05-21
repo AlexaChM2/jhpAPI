@@ -9,7 +9,7 @@ class Detalle_ventas extends Model
     /**
      * Tabla del modelo.
      */
-    protected $table = 'Detalle_Ventas';  // ← Coincide con tu CREATE TABLE
+    protected $table = 'detalle_Ventas';  // ← Coincide con tu CREATE TABLE
 
     /**
      * Clave primaria.

@@ -9,7 +9,7 @@ class Proveedores extends Model
     /**
      * Tabla del modelo.
      */
-    protected $table = 'Proveedores';
+    protected $table = 'proveedores';
 
     /**
      * Clave primaria.

@@ -6,7 +6,7 @@
 
     class Ventas extends Model
     {
-        protected $table = 'Ventas';  // ← Coincide con tu tabla
+        protected $table = 'ventas';  // ← Coincide con tu tabla
         protected $primaryKey = 'id_venta';
         public $timestamps = false;  // ← Si tu tabla no tiene created_at/updated_at
 
