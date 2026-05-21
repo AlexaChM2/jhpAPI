@@ -72,32 +72,46 @@ class VentasController extends Controller
     }
 
     public function show($id)
-    {
-        $venta = DB::table('Ventas')->where('id_venta', $id)->first();
-        
-        if (!$venta) {
-            return response()->json(['success' => false, 'message' => 'No encontrada'], 404);
-        }
-
-        $detalles = DB::table('Detalle_Ventas')
-            ->leftJoin('Producto', 'Detalle_Ventas.id_producto', '=', 'Producto.id_producto')
-            ->where('Detalle_Ventas.id_venta', $id)
-            ->select('Detalle_Ventas.*', 'Producto.pro_nombre')
-            ->get();
-
+{
+    // Agregar el JOIN con Clientes
+    $venta = DB::table('Ventas')
+        ->leftJoin('Clientes', 'Ventas.id_cliente', '=', 'Clientes.id_cliente')
+        ->where('Ventas.id_venta', $id)
+        ->select('Ventas.*', 'Clientes.cli_nombre', 'Clientes.cli_apaterno')
+        ->first();
+    
+    if (!$venta) {
         return response()->json([
-            'success' => true,
-            'data' => [
-                'id_venta' => $venta->id_venta,
-                'ven_fecha' => $venta->ven_fecha,
-                'ven_total' => $venta->ven_total,
-                'tipo_pago' => $venta->tipo_pago,
-                'cliente' => ['cli_nombre' => $venta->cli_nombre],
-                'detalles' => $detalles
-            ]
-        ], 200);
+            'success' => false, 
+            'message' => 'Venta no encontrada'
+        ], 404);
     }
 
+    $detalles = DB::table('Detalle_Ventas')
+        ->leftJoin('Producto', 'Detalle_Ventas.id_producto', '=', 'Producto.id_producto')
+        ->where('Detalle_Ventas.id_venta', $id)
+        ->select(
+            'Detalle_Ventas.*', 
+            'Producto.pro_nombre',
+            'Producto.pro_precio_venta'  // Agregar más campos si los necesitas
+        )
+        ->get();
+
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'id_venta' => $venta->id_venta,
+            'ven_fecha' => $venta->ven_fecha,
+            'ven_total' => $venta->ven_total,
+            'tipo_pago' => $venta->tipo_pago,
+            'cliente' => [
+                'cli_nombre' => $venta->cli_nombre ?? null,
+                'cli_apaterno' => $venta->cli_apaterno ?? null
+            ],
+            'detalles' => $detalles
+        ]
+    ], 200);
+}
     public function update(Request $request, $id)
     {
         DB::table('Ventas')->where('id_venta', $id)->update([
