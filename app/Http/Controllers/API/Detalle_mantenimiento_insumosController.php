@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Models\Detalle_mantenimiento_insumos;
+use App\Models\Detallemantenimientoinsumos;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 
