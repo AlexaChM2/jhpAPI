@@ -29,7 +29,7 @@ class VentasController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'id_cliente' => 'required|exists:clientes,id_cliente',
+            'id_cliente' => 'nullable|exists:clientes,id_cliente',
             'id_empleado' => 'nullable|exists:empleados,id_empleados',
             'id_caja' => 'nullable|exists:control_caja,id_caja',
             'ven_total' => 'required|numeric|min:0',
