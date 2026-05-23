@@ -46,7 +46,7 @@ class ComprasController extends Controller
 
                 // Actualizar stock del producto
                 if (isset($item['id_producto'])) {
-                    DB::table('Producto')
+                    DB::table('producto')
                         ->where('id_producto', $item['id_producto'])
                         ->increment('pro_stock', $item['det_cantidad'] ?? $item['cantidad'] ?? 1);
                 }
