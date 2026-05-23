@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
+//la vd nose 
 class Marca extends Model
 {
     protected $table = 'marcas';
