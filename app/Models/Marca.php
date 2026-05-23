@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Model;
 //la vd nose 
 class Marca extends Model

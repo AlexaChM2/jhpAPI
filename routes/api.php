@@ -121,3 +121,9 @@ Route::apiResource('ventas',VentasController::class);
 Route::apiResource('detalle_cotizaciones',DetalleCotizacionController::class);
 
 Route::get('reportes-detallados', [ReporteController::class, 'datosGraficas']);
+
+use App\Http\Controllers\API\MarcaController;
+
+Route::get('marcas/activas', [MarcaController::class, 'activas']);  // ← PRIMERO
+Route::apiResource('marcas', MarcaController::class);              // ← DESPUÉS
+Route::patch('marcas/{id}/toggle', [MarcaController::class, 'toggleEstado']);
