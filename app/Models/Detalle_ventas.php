@@ -6,24 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class Detalle_ventas extends Model
 {
-    /**
-     * Tabla del modelo.
-     */
-    protected $table = 'detalle_ventas';  // ← Coincide con tu CREATE TABLE
+    protected $table = 'detalle_ventas';
+    protected $primaryKey = 'id_detalle';
+    public $timestamps = false;
 
-    /**
-     * Clave primaria.
-     */
-    protected $primaryKey = 'id_detalle';  // ← Coincide con tu tabla
-
-    /**
-     * SIN timestamps - CORREGIDO (antes estaba true)
-     */
-    public $timestamps = false;  // ← ESTE ERA EL ERROR
-
-    /**
-     * Campos asignables.
-     */
     protected $fillable = [
         'id_venta',
         'id_producto',
@@ -31,19 +17,56 @@ class Detalle_ventas extends Model
         'det_precio_unitario',
     ];
 
-    /**
-     * Relación con Venta.
-     */
+    // Relaciones
     public function venta()
     {
         return $this->belongsTo(Ventas::class, 'id_venta', 'id_venta');
     }
 
-    /**
-     * Relación con Producto.
-     */
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto', 'id_producto');
+    }
+
+    /**
+     * Boot: eventos del modelo
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Al CREAR un detalle, descontar stock
+        static::created(function ($detalle) {
+            $producto = Producto::find($detalle->id_producto);
+            if ($producto) {
+                $producto->descontarStock($detalle->det_cantidad);
+            }
+        });
+
+        // Al ELIMINAR un detalle, devolver stock
+        static::deleted(function ($detalle) {
+            $producto = Producto::find($detalle->id_producto);
+            if ($producto) {
+                $producto->devolverStock($detalle->det_cantidad);
+            }
+        });
+
+        // Al ACTUALIZAR cantidad, ajustar stock
+        static::updated(function ($detalle) {
+            if ($detalle->isDirty('det_cantidad')) {
+                $original = $detalle->getOriginal('det_cantidad');
+                $nueva = $detalle->det_cantidad;
+                $diferencia = $original - $nueva;
+                
+                $producto = Producto::find($detalle->id_producto);
+                if ($producto) {
+                    if ($diferencia > 0) {
+                        $producto->devolverStock(abs($diferencia));
+                    } elseif ($diferencia < 0) {
+                        $producto->descontarStock(abs($diferencia));
+                    }
+                }
+            }
+        });
     }
 }
