@@ -15,7 +15,7 @@ class ProductoController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Producto::with(['categoria', 'proveedor']);
+        $query = Producto::with(['categoria', 'proveedor', 'marca']);  // ← Agregada relación marca
 
         // Filtro por búsqueda
         if ($request->has('search')) {
@@ -24,7 +24,10 @@ class ProductoController extends Controller
                 $q->where('pro_codigo', 'LIKE', "%{$search}%")
                   ->orWhere('pro_nombre', 'LIKE', "%{$search}%")
                   ->orWhere('pro_marca', 'LIKE', "%{$search}%")
-                  ->orWhere('pro_tipo', 'LIKE', "%{$search}%");
+                  ->orWhere('pro_tipo', 'LIKE', "%{$search}%")
+                  ->orWhereHas('marca', function($qMarca) use ($search) {  // ← Buscar por nombre de marca
+                      $qMarca->where('mar_nombre', 'LIKE', "%{$search}%");
+                  });
             });
         }
 
@@ -36,6 +39,11 @@ class ProductoController extends Controller
         // Filtro por proveedor
         if ($request->has('proveedor') && $request->proveedor != '') {
             $query->where('id_proveedor', $request->proveedor);
+        }
+
+        // Filtro por marca (NUEVO)
+        if ($request->has('marca') && $request->marca != '') {
+            $query->where('id_marca', $request->marca);
         }
 
         $productos = $query->orderBy('pro_nombre')
@@ -65,6 +73,7 @@ class ProductoController extends Controller
             'pro_nombre' => 'required|string|max:100',
             'pro_tipo' => 'nullable|string|max:50',
             'pro_marca' => 'nullable|string|max:50',
+            'id_marca' => 'nullable|exists:marcas,id_marca',  // ← NUEVO
             'pro_descripcion' => 'nullable|string',
             'pro_precio_venta' => 'required|numeric|min:0',
             'pro_stock' => 'nullable|integer|min:0',
@@ -78,6 +87,7 @@ class ProductoController extends Controller
             'pro_precio_venta.numeric' => 'El precio debe ser un número',
             'id_categoria.exists' => 'La categoría seleccionada no existe',
             'id_proveedor.exists' => 'El proveedor seleccionado no existe',
+            'id_marca.exists' => 'La marca seleccionada no existe',  // ← NUEVO
         ]);
 
         if ($validator->fails()) {
@@ -93,7 +103,7 @@ class ProductoController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Producto registrado exitosamente',
-            'data' => $producto->load(['categoria', 'proveedor'])
+            'data' => $producto->load(['categoria', 'proveedor', 'marca'])  // ← Agregada marca
         ], 201);
     }
 
@@ -102,7 +112,7 @@ class ProductoController extends Controller
      */
     public function show($id)
     {
-        $producto = Producto::with(['categoria', 'proveedor'])->find($id);
+        $producto = Producto::with(['categoria', 'proveedor', 'marca'])->find($id);  // ← Agregada marca
         
         if (!$producto) {
             return response()->json([
@@ -141,11 +151,14 @@ class ProductoController extends Controller
             'pro_nombre' => 'sometimes|string|max:100',
             'pro_tipo' => 'nullable|string|max:50',
             'pro_marca' => 'nullable|string|max:50',
+            'id_marca' => 'nullable|exists:marcas,id_marca',  // ← NUEVO
             'pro_descripcion' => 'nullable|string',
             'pro_precio_venta' => 'sometimes|numeric|min:0',
             'pro_stock' => 'nullable|integer|min:0',
             'id_categoria' => 'nullable|exists:Categorias,id_categoria',
             'id_proveedor' => 'nullable|exists:Proveedores,id_proveedor',
+        ], [
+            'id_marca.exists' => 'La marca seleccionada no existe',  // ← NUEVO
         ]);
 
         if ($validator->fails()) {
@@ -161,7 +174,7 @@ class ProductoController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Producto actualizado correctamente',
-            'data' => $producto->fresh(['categoria', 'proveedor'])
+            'data' => $producto->fresh(['categoria', 'proveedor', 'marca'])  // ← Agregada marca
         ], 200);
     }
 
@@ -177,6 +190,17 @@ class ProductoController extends Controller
                 'success' => false,
                 'message' => 'Producto no encontrado'
             ], 404);
+        }
+
+        // Verificar si el producto está en ventas o mantenimientos
+        $tieneVentas = \App\Models\Detalle_ventas::where('id_producto', $id)->exists();
+        $tieneMantenimientos = \App\Models\DetalleMantenimientoInsumo::where('id_producto', $id)->exists();
+        
+        if ($tieneVentas || $tieneMantenimientos) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se puede eliminar el producto porque tiene ventas o mantenimientos asociados. Considere desactivarlo en lugar de eliminarlo.'
+            ], 422);
         }
 
         $producto->delete();
@@ -201,10 +225,13 @@ class ProductoController extends Controller
             ], 422);
         }
 
-        $productos = Producto::with(['categoria', 'proveedor'])
+        $productos = Producto::with(['categoria', 'proveedor', 'marca'])  // ← Agregada marca
             ->where('pro_codigo', 'LIKE', "%{$search}%")
             ->orWhere('pro_nombre', 'LIKE', "%{$search}%")
             ->orWhere('pro_marca', 'LIKE', "%{$search}%")
+            ->orWhereHas('marca', function($q) use ($search) {  // ← Buscar por nombre de marca
+                $q->where('mar_nombre', 'LIKE', "%{$search}%");
+            })
             ->limit(20)
             ->get();
 
