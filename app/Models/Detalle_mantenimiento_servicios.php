@@ -6,25 +6,25 @@ use Illuminate\Database\Eloquent\Model;
 
 class Detalle_mantenimiento_servicios extends Model
 {
-    /**
-     * Tabla del modelo.
-     */
     protected $table = 'detalle_mantenimiento_servicios';
-
-    /**
-     * Clave primaria.
-     */
     protected $primaryKey = 'id_det_mant_ser';
-
-    /**
-     * Desactivar timestamps.
-     */
     public $timestamps = false;
 
-    
     protected $fillable = [
         'id_mantenimiento',
         'id_servicio',
         'precio_aplicado',
     ];
+
+    // ✅ Relación con Mantenimiento
+    public function mantenimiento()
+    {
+        return $this->belongsTo(Mantenimiento::class, 'id_mantenimiento', 'id_mantenimiento');
+    }
+
+    // ✅ Relación con Servicio (ESTA ES LA QUE FALTA)
+    public function servicio()
+    {
+        return $this->belongsTo(Servicios::class, 'id_servicio', 'id_servicio');
+    }
 }
