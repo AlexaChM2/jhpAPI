@@ -7,12 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class Mantenimiento extends Model
 {
     protected $table = 'mantenimiento';
-    
-    
     protected $primaryKey = 'id_mantenimiento';
-
-   
-    public $timestamps = false; 
+    public $timestamps = false;
 
     protected $fillable = [
         'id_cliente', 'id_mecanico', 'id_cita', 'moto_modelo', 
@@ -39,6 +35,16 @@ class Mantenimiento extends Model
     {
         return $this->hasMany(
             DetalleMantenimientoInsumo::class,
+            'id_mantenimiento',
+            'id_mantenimiento'
+        );
+    }
+
+    // ✅ AGREGAR ESTA RELACIÓN
+    public function servicios()
+    {
+        return $this->hasMany(
+            Detalle_mantenimiento_servicios::class,
             'id_mantenimiento',
             'id_mantenimiento'
         );
