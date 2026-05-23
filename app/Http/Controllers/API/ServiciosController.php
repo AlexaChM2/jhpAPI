@@ -10,11 +10,27 @@ use Illuminate\Support\Facades\DB;
 class ServiciosController extends Controller
 {
     // LISTAR TODOS LOS SERVICIOS
-    public function index()
-    {
-        EnsureCatalogTables::ensure();
-        return response()->json(DB::table('servicios')->get(), 200);
-    }
+  public function index()
+{
+    EnsureCatalogTables::ensure();
+    
+    $servicios = DB::table('servicios')
+        ->leftJoin('categorias', 'servicios.id_categoria', '=', 'categorias.id_categoria')
+        ->select('servicios.*', 'categorias.cat_nombre as categoria_nombre')
+        ->get()
+        ->map(function ($item) {
+            $item->categoria = (object)[
+                'id_categoria' => $item->id_categoria,
+                'cat_nombre' => $item->categoria_nombre ?? 'Sin categoría'
+            ];
+            return $item;
+        });
+
+    return response()->json([
+        'success' => true,
+        'data' => $servicios
+    ], 200);
+}
 
     // CREAR UN NUEVO SERVICIO
     public function store(Request $request)
@@ -36,23 +52,29 @@ class ServiciosController extends Controller
 
     // MOSTRAR UN SERVICIO ESPECÍFICO
     public function show($id)
-    {
-        EnsureCatalogTables::ensure();
-        $servicio = is_numeric($id)
-            ? DB::table('servicios')->where('id_servicio', $id)->first()
-            : null;
+{
+    EnsureCatalogTables::ensure();
+    
+    $servicio = DB::table('servicios')
+        ->leftJoin('categorias', 'servicios.id_categoria', '=', 'categorias.id_categoria')
+        ->select('servicios.*', 'categorias.cat_nombre as categoria_nombre')
+        ->where('id_servicio', $id)
+        ->first();
 
-        if (!$servicio) {
-            return response()->json([
-                'title' => "Reporte de servicio - {$id}",
-                'fields' => ['ID', 'Nombre', 'Descripcion', 'Precio mano de obra', 'Categoria'],
-                'values' => [$id, 'Servicio', 'Registro no encontrado', '$0.00', 'Servicios'],
-            ], 200);
-        }
-
-        return response()->json($servicio, 200);
+    if (!$servicio) {
+        return response()->json(['message' => 'Servicio no encontrado'], 404);
     }
 
+    $servicio->categoria = (object)[
+        'id_categoria' => $servicio->id_categoria,
+        'cat_nombre' => $servicio->categoria_nombre ?? 'Sin categoría'
+    ];
+
+    return response()->json([
+        'success' => true,
+        'data' => $servicio
+    ], 200);
+}
     // ACTUALIZAR DATOS DEL SERVICIO
     public function update(Request $request, $id)
     {
