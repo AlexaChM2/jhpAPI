@@ -16,15 +16,15 @@ class Detalle_mantenimiento_servicios extends Model
         'precio_aplicado',
     ];
 
-    // ✅ Relación con Mantenimiento
+    
     public function mantenimiento()
     {
         return $this->belongsTo(Mantenimiento::class, 'id_mantenimiento', 'id_mantenimiento');
     }
 
-    // ✅ Relación con Servicio (ESTA ES LA QUE FALTA)
+    
     public function servicio()
     {
-        return $this->belongsTo(Servicios::class, 'id_servicio', 'id_servicio');
+        return $this->belongsTo(servicios::class, 'id_servicio', 'id_servicio');
     }
 }
