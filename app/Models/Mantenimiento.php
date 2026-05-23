@@ -38,7 +38,7 @@ class Mantenimiento extends Model
     public function insumos()
     {
         return $this->hasMany(
-            Detalle_mantenimiento_insumos::class,
+            DetalleMantenimientoInsumo::class,
             'id_mantenimiento',
             'id_mantenimiento'
         );
