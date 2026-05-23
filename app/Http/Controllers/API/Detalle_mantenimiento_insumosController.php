@@ -11,7 +11,7 @@ class Detalle_mantenimiento_insumosController extends Controller
     // LISTAR TODOS LOS INSUMOS UTILIZADOS EN MANTENIMIENTOS
     public function index()
     {
-        $detalles = Detalle_mantenimiento_insumos::with(['producto', 'mantenimiento'])->get();
+        $detalles = detalle_mantenimiento_insumos::with(['producto', 'mantenimiento'])->get();
         return response()->json($detalles, 200);
     }
 
