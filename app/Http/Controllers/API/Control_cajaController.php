@@ -134,11 +134,30 @@ class Control_cajaController extends Controller
 
 public function store(Request $request)
 {
+    // DIAGNÓSTICO: Ver qué está llegando
+    \Log::info('Datos recibidos en store:', [
+        'all' => $request->all(),
+        'json' => $request->json()->all(),
+        'content' => $request->getContent()
+    ]);
+    
+    // Intentar obtener accion de diferentes formas
     $accion = $request->input('accion');
-
+    
+    // Si no viene por input, intentar del JSON
+    if (!$accion) {
+        $accion = $request->json()->get('accion');
+    }
+    
+    // Si aún no, intentar del contenido raw
+    if (!$accion) {
+        $content = json_decode($request->getContent(), true);
+        $accion = $content['accion'] ?? null;
+    }
+    
+    \Log::info('Acción detectada:', ['accion' => $accion]);
+    
     try {
-        //$this->asegurarTablasCaja();
-
         // LÓGICA PARA ABRIR CAJA
         if ($accion === 'abrir') {
             // Verificar si ya hay una caja abierta
@@ -153,7 +172,8 @@ public function store(Request $request)
             }
 
             // Validar monto inicial
-            if (!$request->has('monto_inicial') || $request->monto_inicial < 0) {
+            $montoInicial = $request->input('monto_inicial') ?? $request->json()->get('monto_inicial');
+            if (!$montoInicial || $montoInicial <= 0) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'El monto inicial es requerido y debe ser válido'
@@ -162,8 +182,8 @@ public function store(Request $request)
 
             // Crear nueva caja
             $caja = Control_caja::create([
-                'monto_inicial'  => $request->monto_inicial,
-                'id_empleado'    => $request->id_empleado ?? 1,
+                'monto_inicial'  => $montoInicial,
+                'id_empleado'    => $request->input('id_empleado') ?? $request->json()->get('id_empleado') ?? 1,
                 'fecha_apertura' => now(),
                 'estado'         => 'Abierta'
             ]);
@@ -177,7 +197,7 @@ public function store(Request $request)
             ], 201);
         }
 
-        // LÓGICA PARA CERRAR CAJA - CORREGIDA
+        // LÓGICA PARA CERRAR CAJA
         if ($accion === 'cerrar') {
             $cajaAbierta = Control_caja::where('estado', 'Abierta')->first();
             
@@ -188,29 +208,26 @@ public function store(Request $request)
                 ], 404);
             }
 
-            // Calcular ventas de esta caja - USANDO EL ID_CAJA CORRECTO
+            // Calcular ventas de esta caja
             $ventasHoy = $this->ventasCaja($cajaAbierta->id_caja);
-            
-            // Asegurar que sea un número
             $ventasHoy = $ventasHoy ? (float)$ventasHoy : 0;
             
-            // Calcular monto final esperado (monto_inicial + ventas)
+            // Calcular monto final esperado
             $montoFinalEsperado = (float)$cajaAbierta->monto_inicial + $ventasHoy;
 
             // Actualizar la caja
             $cajaAbierta->update([
                 'monto_final_esperado' => $montoFinalEsperado,
-                'monto_real_cierre' => $request->monto_real_cierre ?? $montoFinalEsperado,
+                'monto_real_cierre' => $request->input('monto_real_cierre') ?? $montoFinalEsperado,
                 'fecha_cierre'      => now(),
                 'estado'            => 'Cerrada'
             ]);
 
-            // Devolver respuesta con los valores calculados
             return response()->json([
                 'status'  => 'success',
                 'message' => 'Caja cerrada correctamente',
                 'data'    => $cajaAbierta,
-                'ventas_hoy' => number_format($ventasHoy, 2, '.', ''), // ← AHORA SÍ ENVIAMOS LAS VENTAS
+                'ventas_hoy' => number_format($ventasHoy, 2, '.', ''),
                 'monto_final_esperado' => number_format($montoFinalEsperado, 2, '.', '')
             ], 200);
         }
