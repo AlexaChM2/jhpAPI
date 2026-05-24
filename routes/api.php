@@ -78,13 +78,15 @@ Route::apiResource('compras', ComprasController::class);
 
 // control de cajas abierto o cerrado :D
 
-Route::get('control_caja/estado', [Control_cajaController::class, 'consultarEstado']);
-Route::get('control_caja', [Control_cajaController::class, 'index']);
-Route::get('control_caja/{id}', [Control_cajaController::class, 'show']);
-Route::post('control_caja', [Control_cajaController::class, 'store']);      // Para abrir
-Route::put('control_caja/{id}', [Control_cajaController::class, 'update']);  // Para cerrar
-Route::delete('control_caja/{id}', [Control_cajaController::class, 'destroy']);
+// Rutas específicas para caja (MÁS SIMPLES)
+Route::post('/caja/abrir', [Control_cajaController::class, 'abrirCaja']);
+Route::post('/caja/cerrar', [Control_cajaController::class, 'cerrarCaja']);
+Route::get('/caja/estado', [Control_cajaController::class, 'consultarEstado']);
+Route::get('/caja', [Control_cajaController::class, 'index']);
 
+// Mantén las rutas originales si las necesitas
+Route::get('control_caja/estado', [Control_cajaController::class, 'consultarEstado']);
+Route::apiResource('control_caja', Control_cajaController::class);
 
 
 //fin  xd
