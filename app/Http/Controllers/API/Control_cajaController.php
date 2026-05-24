@@ -75,7 +75,7 @@ class Control_cajaController extends Controller
  public function consultarEstado()
 {
     try {
-        $this->asegurarTablasCaja();
+        //$this->asegurarTablasCaja();
 
         // Buscar caja abierta
         $caja = Control_caja::where('estado', 'Abierta')->first();
@@ -137,7 +137,7 @@ public function store(Request $request)
     $accion = $request->input('accion');
 
     try {
-        $this->asegurarTablasCaja();
+        //$this->asegurarTablasCaja();
 
         // LÓGICA PARA ABRIR CAJA
         if ($accion === 'abrir') {
