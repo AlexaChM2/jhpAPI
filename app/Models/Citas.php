@@ -17,7 +17,7 @@ class Citas extends Model
     protected $primaryKey = 'id_cita';
 
   
-    public $timestamps = true;
+    public $timestamps = false;
 
  
     protected $fillable = [
@@ -26,6 +26,7 @@ class Citas extends Model
         'cita_fecha_programada',
         'cita_motivo',
         'cita_estado',
+        'cita_tipo',  
         'cita_notas',
     ];
 
