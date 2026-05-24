@@ -6,12 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Control_caja extends Model
 {
-    // Cambiar a la tabla SIN S (la que tiene los datos reales)
+    // Usar el nombre REAL de la tabla (sin S)
     protected $table = 'control_caja';  // ← Importante: sin S
     
     protected $primaryKey = 'id_caja';
     
-    // La tabla control_caja NO tiene created_at/updated_at
+    // Esta tabla NO tiene created_at/updated_at
     public $timestamps = false;
     
     protected $fillable = [
