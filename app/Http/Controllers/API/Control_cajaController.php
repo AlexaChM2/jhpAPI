@@ -72,55 +72,53 @@ class Control_cajaController extends Controller
     /**
      * Verifica si hay una caja abierta actualmente.
      */
- public function consultarEstado()
-{
-    try {
-        //$this->asegurarTablasCaja();
+    public function consultarEstado()
+    {
+        try {
+            // Buscar caja abierta
+            $caja = Control_caja::where('estado', 'Abierta')->first();
 
-        // Buscar caja abierta
-        $caja = Control_caja::where('estado', 'Abierta')->first();
+            if ($caja) {
+                // Sumar ventas del día para esta caja
+                $ventasHoy = $this->ventasCaja($caja->id_caja);
+                
+                // Formatear el resultado
+                $ventasHoy = $ventasHoy ? number_format($ventasHoy, 2, '.', '') : '0.00';
 
-        if ($caja) {
-            // Sumar ventas del día para esta caja
-            $ventasHoy = $this->ventasCaja($caja->id_caja);
-            
-            // Formatear el resultado
-            $ventasHoy = $ventasHoy ? number_format($ventasHoy, 2, '.', '') : '0.00';
+                return response()->json([
+                    'status' => 'success',
+                    'caja_abierta' => true,
+                    'monto_inicial' => $caja->monto_inicial,
+                    'ventas_hoy' => $ventasHoy,
+                    'id_caja' => $caja->id_caja,
+                    'fecha_apertura' => $caja->fecha_apertura,
+                    'data' => $caja
+                ], 200);
+            }
+
+            // Si no hay caja abierta, buscar la última caja cerrada para mostrar histórico
+            $ultimaCaja = Control_caja::where('estado', 'Cerrada')
+                ->latest('fecha_cierre')
+                ->first();
 
             return response()->json([
                 'status' => 'success',
-                'caja_abierta' => true,
-                'monto_inicial' => $caja->monto_inicial,
-                'ventas_hoy' => $ventasHoy,
-                'id_caja' => $caja->id_caja,
-                'fecha_apertura' => $caja->fecha_apertura,
-                'data' => $caja
+                'caja_abierta' => false,
+                'ventas_hoy' => '0.00',
+                'ultima_caja' => $ultimaCaja ? [
+                    'id_caja' => $ultimaCaja->id_caja,
+                    'fecha_cierre' => $ultimaCaja->fecha_cierre,
+                    'total_ventas' => $ultimaCaja->monto_final_esperado - $ultimaCaja->monto_inicial
+                ] : null
             ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al consultar estado: ' . $e->getMessage()
+            ], 500);
         }
-
-        // Si no hay caja abierta, buscar la última caja cerrada para mostrar histórico
-        $ultimaCaja = Control_caja::where('estado', 'Cerrada')
-            ->latest('fecha_cierre')
-            ->first();
-
-        return response()->json([
-            'status' => 'success',
-            'caja_abierta' => false,
-            'ventas_hoy' => '0.00',
-            'ultima_caja' => $ultimaCaja ? [
-                'id_caja' => $ultimaCaja->id_caja,
-                'fecha_cierre' => $ultimaCaja->fecha_cierre,
-                'total_ventas' => $ultimaCaja->monto_final_esperado - $ultimaCaja->monto_inicial
-            ] : null
-        ], 200);
-
-    } catch (Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Error al consultar estado: ' . $e->getMessage()
-        ], 500);
     }
-}
 
     public function index()
     {
@@ -132,118 +130,189 @@ class Control_cajaController extends Controller
         }
     }
 
-public function store(Request $request)
-{
-    // DIAGNÓSTICO: Ver qué está llegando
-    \Log::info('Datos recibidos en store:', [
-        'all' => $request->all(),
-        'json' => $request->json()->all(),
-        'content' => $request->getContent()
-    ]);
-    
-    // Intentar obtener accion de diferentes formas
-    $accion = $request->input('accion');
-    
-    // Si no viene por input, intentar del JSON
-    if (!$accion) {
-        $accion = $request->json()->get('accion');
-    }
-    
-    // Si aún no, intentar del contenido raw
-    if (!$accion) {
-        $content = json_decode($request->getContent(), true);
-        $accion = $content['accion'] ?? null;
-    }
-    
-    \Log::info('Acción detectada:', ['accion' => $accion]);
-    
-    try {
-        // LÓGICA PARA ABRIR CAJA
-        if ($accion === 'abrir') {
-            // Verificar si ya hay una caja abierta
-            $cajaAbiertaExistente = Control_caja::where('estado', 'Abierta')->first();
+    public function store(Request $request)
+    {
+        try {
+            // ==========================================
+            // DETECTAR ACCIÓN DE MÚLTIPLES FORMAS
+            // ==========================================
             
-            if ($cajaAbiertaExistente) {
-                return response()->json([
-                    'status' => 'error', 
-                    'message' => 'Ya existe una caja abierta',
-                    'caja_actual' => $cajaAbiertaExistente
-                ], 400);
+            $accion = null;
+            
+            // 1. Intentar desde input normal (POST form)
+            if ($request->has('accion')) {
+                $accion = $request->input('accion');
             }
-
-            // Validar monto inicial
-            $montoInicial = $request->input('monto_inicial') ?? $request->json()->get('monto_inicial');
-            if (!$montoInicial || $montoInicial <= 0) {
+            
+            // 2. Intentar desde JSON
+            if (!$accion && $request->json()->has('accion')) {
+                $accion = $request->json()->get('accion');
+            }
+            
+            // 3. Intentar desde contenido raw
+            if (!$accion) {
+                $content = json_decode($request->getContent(), true);
+                if (isset($content['accion'])) {
+                    $accion = $content['accion'];
+                }
+            }
+            
+            // 4. Intentar desde $_POST directo (x-www-form-urlencoded)
+            if (!$accion && isset($_POST['accion'])) {
+                $accion = $_POST['accion'];
+            }
+            
+            // 5. Intentar desde query string (GET)
+            if (!$accion && $request->query('accion')) {
+                $accion = $request->query('accion');
+            }
+            
+            // Si no hay acción, devolver error
+            if (!$accion) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'El monto inicial es requerido y debe ser válido'
+                    'message' => 'No se recibió el campo "accion". Use "abrir" o "cerrar"',
+                    'debug' => [
+                        'method' => $request->method(),
+                        'content_type' => $request->header('Content-Type'),
+                        'all_input' => $request->all(),
+                        'post' => $_POST
+                    ]
                 ], 400);
             }
-
-            // Crear nueva caja
-            $caja = Control_caja::create([
-                'monto_inicial'  => $montoInicial,
-                'id_empleado'    => $request->input('id_empleado') ?? $request->json()->get('id_empleado') ?? 1,
-                'fecha_apertura' => now(),
-                'estado'         => 'Abierta'
-            ]);
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Caja abierta con éxito',
-                'data'    => $caja,
-                'ventas_hoy' => '0.00',
-                'caja_abierta' => true
-            ], 201);
-        }
-
-        // LÓGICA PARA CERRAR CAJA
-        if ($accion === 'cerrar') {
-            $cajaAbierta = Control_caja::where('estado', 'Abierta')->first();
             
-            if (!$cajaAbierta) {
+            // ==========================================
+            // ABRIR CAJA
+            // ==========================================
+            if ($accion === 'abrir') {
+                // Verificar si ya hay una caja abierta
+                $cajaAbiertaExistente = Control_caja::where('estado', 'Abierta')->first();
+                
+                if ($cajaAbiertaExistente) {
+                    return response()->json([
+                        'status' => 'error', 
+                        'message' => 'Ya existe una caja abierta',
+                        'caja_actual' => $cajaAbiertaExistente
+                    ], 400);
+                }
+                
+                // Obtener monto inicial (de múltiples formas)
+                $montoInicial = null;
+                
+                if ($request->has('monto_inicial')) {
+                    $montoInicial = $request->input('monto_inicial');
+                } elseif ($request->json()->has('monto_inicial')) {
+                    $montoInicial = $request->json()->get('monto_inicial');
+                } elseif (isset($_POST['monto_inicial'])) {
+                    $montoInicial = $_POST['monto_inicial'];
+                } else {
+                    $content = json_decode($request->getContent(), true);
+                    if (isset($content['monto_inicial'])) {
+                        $montoInicial = $content['monto_inicial'];
+                    }
+                }
+                
+                if (!$montoInicial || floatval($montoInicial) <= 0) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'El monto inicial es requerido y debe ser mayor a 0'
+                    ], 400);
+                }
+                
+                // Obtener id_empleado
+                $idEmpleado = null;
+                if ($request->has('id_empleado')) {
+                    $idEmpleado = $request->input('id_empleado');
+                } elseif ($request->json()->has('id_empleado')) {
+                    $idEmpleado = $request->json()->get('id_empleado');
+                } elseif (isset($_POST['id_empleado'])) {
+                    $idEmpleado = $_POST['id_empleado'];
+                }
+                
+                if (!$idEmpleado) {
+                    $idEmpleado = 1;
+                }
+                
+                // Crear nueva caja
+                $caja = Control_caja::create([
+                    'monto_inicial'  => floatval($montoInicial),
+                    'id_empleado'    => $idEmpleado,
+                    'fecha_apertura' => now(),
+                    'estado'         => 'Abierta'
+                ]);
+                
                 return response()->json([
-                    'status' => 'error', 
-                    'message' => 'No hay caja abierta para cerrar'
-                ], 404);
+                    'status'  => 'success',
+                    'message' => 'Caja abierta con éxito',
+                    'data'    => $caja,
+                    'ventas_hoy' => '0.00',
+                    'caja_abierta' => true
+                ], 201);
             }
-
-            // Calcular ventas de esta caja
-            $ventasHoy = $this->ventasCaja($cajaAbierta->id_caja);
-            $ventasHoy = $ventasHoy ? (float)$ventasHoy : 0;
             
-            // Calcular monto final esperado
-            $montoFinalEsperado = (float)$cajaAbierta->monto_inicial + $ventasHoy;
-
-            // Actualizar la caja
-            $cajaAbierta->update([
-                'monto_final_esperado' => $montoFinalEsperado,
-                'monto_real_cierre' => $request->input('monto_real_cierre') ?? $montoFinalEsperado,
-                'fecha_cierre'      => now(),
-                'estado'            => 'Cerrada'
-            ]);
-
+            // ==========================================
+            // CERRAR CAJA
+            // ==========================================
+            if ($accion === 'cerrar') {
+                $cajaAbierta = Control_caja::where('estado', 'Abierta')->first();
+                
+                if (!$cajaAbierta) {
+                    return response()->json([
+                        'status' => 'error', 
+                        'message' => 'No hay caja abierta para cerrar'
+                    ], 404);
+                }
+                
+                // Calcular ventas de esta caja
+                $ventasHoy = $this->ventasCaja($cajaAbierta->id_caja);
+                $ventasHoy = $ventasHoy ? (float)$ventasHoy : 0;
+                
+                // Calcular monto final esperado
+                $montoFinalEsperado = (float)$cajaAbierta->monto_inicial + $ventasHoy;
+                
+                // Obtener monto real de cierre (opcional)
+                $montoRealCierre = $montoFinalEsperado;
+                if ($request->has('monto_real_cierre')) {
+                    $montoRealCierre = $request->input('monto_real_cierre');
+                } elseif ($request->json()->has('monto_real_cierre')) {
+                    $montoRealCierre = $request->json()->get('monto_real_cierre');
+                } elseif (isset($_POST['monto_real_cierre'])) {
+                    $montoRealCierre = $_POST['monto_real_cierre'];
+                }
+                
+                // Actualizar la caja
+                $cajaAbierta->update([
+                    'monto_final_esperado' => $montoFinalEsperado,
+                    'monto_real_cierre'    => floatval($montoRealCierre),
+                    'fecha_cierre'         => now(),
+                    'estado'               => 'Cerrada'
+                ]);
+                
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Caja cerrada correctamente',
+                    'data'    => $cajaAbierta,
+                    'ventas_hoy' => number_format($ventasHoy, 2, '.', ''),
+                    'monto_final_esperado' => number_format($montoFinalEsperado, 2, '.', '')
+                ], 200);
+            }
+            
+            // ==========================================
+            // ACCIÓN NO VÁLIDA
+            // ==========================================
             return response()->json([
-                'status'  => 'success',
-                'message' => 'Caja cerrada correctamente',
-                'data'    => $cajaAbierta,
-                'ventas_hoy' => number_format($ventasHoy, 2, '.', ''),
-                'monto_final_esperado' => number_format($montoFinalEsperado, 2, '.', '')
-            ], 200);
+                'status' => 'error', 
+                'message' => 'Acción no válida. Use "abrir" o "cerrar"',
+                'accion_recibida' => $accion
+            ], 400);
+            
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error', 
+                'message' => 'Error en el servidor: ' . $e->getMessage()
+            ], 500);
         }
-
-        return response()->json([
-            'status' => 'error', 
-            'message' => 'Acción no válida. Use "abrir" o "cerrar"'
-        ], 400);
-
-    } catch (Exception $e) {
-        return response()->json([
-            'status' => 'error', 
-            'message' => 'Error en el servidor: ' . $e->getMessage()
-        ], 500);
     }
-}
 
     public function show($id)
     {
@@ -252,6 +321,43 @@ public function store(Request $request)
             return response()->json($caja, 200);
         } catch (Exception $e) {
             return response()->json(['error' => 'Registro no encontrado'], 404);
+        }
+    }
+
+    public function update(Request $request, $id)
+    {
+        try {
+            $caja = Control_caja::findOrFail($id);
+            
+            // Si la acción es 'cerrar' o se envía estado 'Cerrada'
+            if (($request->input('accion') === 'cerrar') || ($request->input('estado') === 'Cerrada')) {
+                $ventasHoy = $this->ventasCaja($caja->id_caja);
+                $montoFinalEsperado = (float)$caja->monto_inicial + (float)$ventasHoy;
+                
+                $caja->update([
+                    'estado' => 'Cerrada',
+                    'fecha_cierre' => now(),
+                    'monto_final_esperado' => $montoFinalEsperado,
+                    'monto_real_cierre' => $request->input('monto_real_cierre') ?? $montoFinalEsperado
+                ]);
+                
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Caja cerrada correctamente',
+                    'data' => $caja
+                ], 200);
+            }
+            
+            // Actualización normal
+            $caja->update($request->all());
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Caja actualizada correctamente',
+                'data' => $caja
+            ], 200);
+            
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
