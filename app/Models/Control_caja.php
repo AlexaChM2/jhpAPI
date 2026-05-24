@@ -6,16 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Control_caja extends Model
 {
+    protected $table = 'control_caja';  // ← Sin S
     
-    protected $table = 'control_cajas';
-
-   
     protected $primaryKey = 'id_caja';
-
-   
-    public $timestamps = true;
-
-   
+    
+    public $timestamps = false;  // ← La tabla no tiene created_at/updated_at
+    
     protected $fillable = [
         'id_empleado',
         'fecha_apertura',
