@@ -17,32 +17,19 @@ class DetalleMantenimientoInsumo extends Model
         'insumo_precio_unitario'
     ];
 
-    // Relación con producto
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto', 'id_producto');
     }
 
-    // Relación con mantenimiento
     public function mantenimiento()
     {
         return $this->belongsTo(Mantenimiento::class, 'id_mantenimiento', 'id_mantenimiento');
     }
 
-    // ❌ DESACTIVAR EVENTOS AUTOMÁTICOS
-    // El stock se maneja MANUALMENTE en MantenimientoController
-    /*
+    // ❌ SIN EVENTOS AUTOMÁTICOS - Stock se maneja en Controller
     protected static function boot()
     {
         parent::boot();
-        
-        static::created(function ($detalle) {
-            // NO hacer nada - el controller ya descuenta stock
-        });
-        
-        static::deleted(function ($detalle) {
-            // NO hacer nada - el controller ya repone stock
-        });
     }
-    */
 }
