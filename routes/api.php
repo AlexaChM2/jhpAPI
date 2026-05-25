@@ -26,6 +26,7 @@ use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\PasswordResetController;
 use App\Http\Controllers\API\UsuarioController;
 use App\Http\Controllers\API\InventarioController;
+use App\Http\Controllers\API\ProveedorVisitasController;
 
 
 /*
@@ -139,3 +140,12 @@ use App\Http\Controllers\API\MarcaController;
 Route::get('marcas/activas', [MarcaController::class, 'activas']);  // ← PRIMERO
 Route::apiResource('marcas', MarcaController::class);              // ← DESPUÉS
 Route::patch('marcas/{id}/toggle', [MarcaController::class, 'toggleEstado']);
+
+
+
+// Visitas de proveedores
+Route::get('/proveedores/{idProveedor}/visitas', [ProveedorVisitasController::class, 'index']);
+Route::post('/proveedor-visitas', [ProveedorVisitasController::class, 'store']);
+Route::put('/proveedor-visitas/{id}', [ProveedorVisitasController::class, 'update']);
+Route::delete('/proveedor-visitas/{id}', [ProveedorVisitasController::class, 'destroy']);
+Route::get('/proveedores/{idProveedor}/proxima-visita', [ProveedorVisitasController::class, 'proximaVisita']);
