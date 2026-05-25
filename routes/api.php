@@ -1,19 +1,5 @@
 <?php
 
-// ==========================================
-// AGREGAR HEADERS CORS GLOBALES
-// ==========================================
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-CSRF-TOKEN');
-header('Access-Control-Max-Age: 86400');
-
-// Manejar solicitudes OPTIONS preflight
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
-}
-
 use App\Http\Controllers\API\ClimaController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\CategoriasController;
@@ -40,7 +26,7 @@ use App\Http\Controllers\API\PasswordResetController;
 use App\Http\Controllers\API\UsuarioController;
 use App\Http\Controllers\API\InventarioController;
 use App\Http\Controllers\API\ProveedorVisitasController;
-
+use App\Http\Controllers\API\MarcaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -72,15 +58,11 @@ Route::prefix('auth')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::prefix('password-reset')->group(function () {
-    Route::options('request', function() { return response('', 200); });
     Route::post('request', [PasswordResetController::class, 'requestReset']);
-    Route::options('validate-token', function() { return response('', 200); });
     Route::post('validate-token', [PasswordResetController::class, 'validateToken']);
-    Route::options('reset', function() { return response('', 200); });
     Route::post('reset', [PasswordResetController::class, 'resetPassword']);
     Route::post('change', [PasswordResetController::class, 'changePassword'])->middleware('auth:sanctum');
 });
-
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('usuarios', UsuarioController::class);
@@ -89,45 +71,29 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::apiResource('citas', CitasController::class);
 Route::apiResource('clientes', ClienteController::class);
-
 Route::apiResource('compras', ComprasController::class);
 
-
 // control de cajas abierto o cerrado :D
-
-// Rutas específicas para caja (MÁS SIMPLES)
 Route::post('/caja/abrir', [Control_cajaController::class, 'abrirCaja']);
 Route::post('/caja/cerrar', [Control_cajaController::class, 'cerrarCaja']);
 Route::get('/caja/estado', [Control_cajaController::class, 'consultarEstado']);
 Route::get('/caja', [Control_cajaController::class, 'index']);
-
-// Mantén las rutas originales si las necesitas
 Route::get('control_caja/estado', [Control_cajaController::class, 'consultarEstado']);
 Route::apiResource('control_caja', Control_cajaController::class);
 
-
-//fin  xd
-
 Route::apiResource('cotizaciones', CotizacionesController::class);
 Route::apiResource('detalle_cotizaciones', DetalleCotizacionController::class);
-
 Route::apiResource('detalle_cita_servicios', Detalle_cita_serviciosController::class);
 Route::apiResource('detalle_compras', Detalle_comprasController::class);
 Route::apiResource('detalle_mantenimiento_insumos', Detalle_mantenimiento_insumosController::class);
 Route::apiResource('detalle_mantenimiento_servicios', Detalle_mantenimiento_serviciosController::class);
 Route::apiResource('detalle_ventas', Detalle_ventasController::class);
-
 Route::apiResource('empleados', EmpleadosController::class);
 Route::apiResource('mantenimiento', MantenimientoController::class);
-
 Route::apiResource('producto', ProductoController::class);
-
-
-
 Route::apiResource('inventario', InventarioController::class);
 Route::apiResource('inventarios', InventarioController::class);
 
-//h,
 Route::get('/proveedor-visitas/{idProveedor}', [ProveedorVisitasController::class, 'index']);
 Route::get('/proveedor-visitas/{idProveedor}/proxima', [ProveedorVisitasController::class, 'proximaVisita']);
 Route::post('/proveedor-visitas', [ProveedorVisitasController::class, 'store']);
@@ -139,7 +105,6 @@ Route::apiResource('categorias', CategoriasController::class);
 Route::put('/categorias/{id}', [CategoriasController::class, 'update']);
 
 Route::prefix('clima')->group(function () {
-   
     Route::get('/', function () {
         return response()->json([
             'endpoints' => [
@@ -149,19 +114,13 @@ Route::prefix('clima')->group(function () {
             'mensaje' => 'Usa /api/clima/actual o /api/clima/pronostico'
         ]);
     });
-    
     Route::get('/actual', [ClimaController::class, 'actual']);
     Route::get('/pronostico', [ClimaController::class, 'pronostico']);
 });
 
 Route::apiResource('servicios', ServiciosController::class);
-Route::apiResource('ventas',VentasController::class);
-Route::apiResource('detalle_cotizaciones',DetalleCotizacionController::class);
-
+Route::apiResource('ventas', VentasController::class);
 Route::get('reportes-detallados', [ReporteController::class, 'datosGraficas']);
-
-use App\Http\Controllers\API\MarcaController;
-
-Route::get('marcas/activas', [MarcaController::class, 'activas']);  // ← PRIMERO
-Route::apiResource('marcas', MarcaController::class);              // ← DESPUÉS
+Route::get('marcas/activas', [MarcaController::class, 'activas']);
+Route::apiResource('marcas', MarcaController::class);
 Route::patch('marcas/{id}/toggle', [MarcaController::class, 'toggleEstado']);
