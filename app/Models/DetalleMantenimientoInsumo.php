@@ -29,25 +29,19 @@ class DetalleMantenimientoInsumo extends Model
         return $this->belongsTo(Mantenimiento::class, 'id_mantenimiento', 'id_mantenimiento');
     }
 
-    // ❌ ELIMINAR O COMENTAR EL BOOT SI TIENE EVENTOS AUTOMÁTICOS
-    // Ya que ahora manejamos el stock manualmente en el controller
+    // ❌ DESACTIVAR EVENTOS AUTOMÁTICOS
+    // El stock se maneja MANUALMENTE en MantenimientoController
     /*
     protected static function boot()
     {
         parent::boot();
         
         static::created(function ($detalle) {
-            $producto = Producto::find($detalle->id_producto);
-            if ($producto) {
-                $producto->decrement('pro_stock', $detalle->insumo_cantidad);
-            }
+            // NO hacer nada - el controller ya descuenta stock
         });
         
         static::deleted(function ($detalle) {
-            $producto = Producto::find($detalle->id_producto);
-            if ($producto) {
-                $producto->increment('pro_stock', $detalle->insumo_cantidad);
-            }
+            // NO hacer nada - el controller ya repone stock
         });
     }
     */
