@@ -5,6 +5,8 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Usuario;
 use App\Models\User;
+use App\Models\Cliente;
+use App\Models\Empleado;
 use Illuminate\Support\Facades\Schema;
 use App\Models\PasswordReset;
 use Illuminate\Http\Request;
@@ -46,34 +48,29 @@ class PasswordResetController extends Controller
                 ], 200);
             }
 
-            // Crear solicitud de recuperación
-            $recipientEmail = $usuario instanceof Usuario ? $usuario->correo : $usuario->email;
+            // Obtener el email según el tipo de usuario
+            $recipientEmail = $this->getUserEmail($usuario);
+
+            // Obtener el ID del usuario
+            $userId = $this->getUserId($usuario);
 
             $passwordReset = PasswordReset::crearSolicitud(
-                $usuario instanceof Usuario ? $usuario->id_usuario : null,
+                $userId,
                 $recipientEmail,
                 $request
             );
 
             // Enviar email con token
-
             try {
                 Mail::to($recipientEmail)
                     ->send(new PasswordResetMail($usuario, $passwordReset->token));
             } catch (\Exception $mailException) {
                 $mailError = $mailException->getMessage();
                 \Log::error('Error enviando email de recuperación: ' . $mailError);
-                \Log::error('Configuracion SMTP usada al fallar envio', [
-                    'correo' => $recipientEmail,
-                    'mailer' => config('mail.default'),
-                    'host' => config('mail.mailers.smtp.host'),
-                    'port' => config('mail.mailers.smtp.port'),
-                    'encryption' => config('mail.mailers.smtp.encryption'),
-                ]);
 
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se pudo enviar el correo de recuperacion. Verifica la configuracion SMTP del servidor.',
+                    'message' => 'No se pudo enviar el correo de recuperación. Verifica la configuración SMTP del servidor.',
                     'debug_info' => config('app.debug') ? [
                         'token_created' => true,
                         'mail_sent' => false,
@@ -85,16 +82,13 @@ class PasswordResetController extends Controller
             $response = [
                 'success' => true,
                 'message' => 'Si el correo está registrado, recibirá instrucciones de recuperación',
-                'debug_info' => [
-                    'token_created' => true,
-                    'token_expires_in_hours' => 24,
-                    'mail_sent' => true,
-                ],
             ];
 
             if (config('app.debug')) {
-                $response['debug_info']['token'] = $passwordReset->token;
-                $response['debug_info']['correo'] = $recipientEmail;
+                $response['debug_info'] = [
+                    'token' => $passwordReset->token,
+                    'correo' => $recipientEmail,
+                ];
             }
 
             return response()->json($response, 200);
@@ -106,6 +100,78 @@ class PasswordResetController extends Controller
                 'message' => 'Error en el servidor: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Buscar usuario para recuperación en clientes, empleados, usuarios o users
+     */
+    private function findPasswordResetUser(string $correo)
+    {
+        // 1. Buscar en clientes
+        $cliente = Cliente::where('cli_correo', $correo)->first();
+        if ($cliente) {
+            return $cliente;
+        }
+
+        // 2. Buscar en empleados
+        $empleado = Empleado::where('emp_correo', $correo)->first();
+        if ($empleado) {
+            return $empleado;
+        }
+
+        // 3. Buscar en tabla usuarios
+        $usuario = Usuario::where('correo', $correo)->first();
+        if ($usuario) {
+            return $usuario;
+        }
+
+        // 4. Buscar en tabla users (Laravel default)
+        $userQuery = User::where('email', $correo);
+        if (Schema::hasColumn('users', 'correo')) {
+            $userQuery->orWhere('correo', $correo);
+        }
+
+        return $userQuery->first();
+    }
+
+    /**
+     * Obtener el email del usuario según su tipo
+     */
+    private function getUserEmail($usuario)
+    {
+        if ($usuario instanceof Cliente) {
+            return $usuario->cli_correo;
+        }
+        if ($usuario instanceof Empleado) {
+            return $usuario->emp_correo;
+        }
+        if ($usuario instanceof Usuario) {
+            return $usuario->correo;
+        }
+        if ($usuario instanceof User) {
+            return $usuario->email;
+        }
+        return null;
+    }
+
+    /**
+     * Obtener el ID del usuario según su tipo
+     */
+    private function getUserId($usuario)
+    {
+        if ($usuario instanceof Cliente) {
+            return $usuario->id_cliente;
+        }
+        if ($usuario instanceof Empleado) {
+            return $usuario->id_empleados;
+        }
+        if ($usuario instanceof Usuario) {
+            return $usuario->id_usuario;
+        }
+        if ($usuario instanceof User) {
+            return $usuario->id;
+        }
+        return null;
     }
 
     /**
@@ -162,10 +228,10 @@ class PasswordResetController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'token' => 'required|string',
-                'password' => 'required|string|min:8|confirmed',
+                'password' => 'required|string|min:6|confirmed',
             ], [
                 'password.confirmed' => 'Las contraseñas no coinciden',
-                'password.min' => 'La contraseña debe tener al menos 8 caracteres',
+                'password.min' => 'La contraseña debe tener al menos 6 caracteres',
             ]);
 
             if ($validator->fails()) {
@@ -193,54 +259,57 @@ class PasswordResetController extends Controller
                 ], 400);
             }
 
-            // Obtener usuarios por correo: preferimos la tabla `users` pero
-            // también actualizaremos `usuarios` si existe.
-            $userQuery = User::where('email', $passwordReset->correo);
-            if (Schema::hasColumn('users', 'correo')) {
-                $userQuery->orWhere('correo', $passwordReset->correo);
-            }
-            $userModel = $userQuery->first();
-            $usuarioModel = $passwordReset->usuario; // may be null
+            $correo = $passwordReset->correo;
+            $usuarioModel = $this->findPasswordResetUser($correo);
 
-            if (!$userModel && !$usuarioModel) {
+            if (!$usuarioModel) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Usuario no encontrado',
                 ], 404);
             }
 
-            // Actualizar contraseña
+            // Actualizar contraseña según el tipo de usuario
             try {
-                // Actualizar directamente la tabla `users` (hash explícito)
-                $usersQuery = DB::table('users')->where('email', $passwordReset->correo);
-                if (Schema::hasColumn('users', 'correo')) {
-                    $usersQuery->orWhere('correo', $passwordReset->correo);
-                }
-                $updatedUsers = $usersQuery->update(['password' => Hash::make($request->password)]);
-
-                // También actualizar vía modelo `User` si está disponible (usa mutator)
-                if ($userModel instanceof \App\Models\User) {
-                    $userModel->password = $request->password; // mutator aplicará hashing
-                    $userModel->save();
-                    // Verificar que la contraseña quedó hasheada en la DB; si no, forzar actualización
-                    $fresh = $userModel->fresh();
-                    if (is_null($fresh) || (!str_starts_with($fresh->password, '$2y$') && !str_starts_with($fresh->password, '$argon'))) {
-                        try {
-                            $usersQueryForce = DB::table('users')->where('email', $passwordReset->correo);
-                            if (Schema::hasColumn('users', 'correo')) {
-                                $usersQueryForce->orWhere('correo', $passwordReset->correo);
-                            }
-                            $usersQueryForce->update(['password' => Hash::make($request->password)]);
-                        } catch (\Exception $e) {
-                            \Log::error('Error forzando hash en users: ' . $e->getMessage());
-                        }
-                    }
-                }
-
-                // Luego actualizar la tabla `usuarios` si existe (mutator en Usuario)
-                if ($usuarioModel instanceof \App\Models\Usuario) {
-                    $usuarioModel->password = $request->password;
+                $hashedPassword = Hash::make($request->password);
+                
+                // Cliente
+                if ($usuarioModel instanceof Cliente) {
+                    $usuarioModel->cli_password = $hashedPassword;
                     $usuarioModel->save();
+                }
+                // Empleado
+                elseif ($usuarioModel instanceof Empleado) {
+                    $usuarioModel->emp_password = $hashedPassword;
+                    $usuarioModel->save();
+                }
+                // Usuario
+                elseif ($usuarioModel instanceof Usuario) {
+                    $usuarioModel->password = $hashedPassword;
+                    $usuarioModel->save();
+                }
+                // User
+                elseif ($usuarioModel instanceof User) {
+                    $usuarioModel->password = $hashedPassword;
+                    $usuarioModel->save();
+                }
+                // Fallback: actualizar directamente en la tabla correspondiente
+                else {
+                    // Intentar actualizar en clientes
+                    $updated = Cliente::where('cli_correo', $correo)
+                        ->update(['cli_password' => $hashedPassword]);
+                    
+                    // Si no se actualizó, intentar en empleados
+                    if (!$updated) {
+                        $updated = Empleado::where('emp_correo', $correo)
+                            ->update(['emp_password' => $hashedPassword]);
+                    }
+                    
+                    // Si no se actualizó, intentar en usuarios
+                    if (!$updated) {
+                        Usuario::where('correo', $correo)
+                            ->update(['password' => $hashedPassword]);
+                    }
                 }
             } catch (\Exception $e) {
                 \Log::error('Error actualizando contraseña: ' . $e->getMessage());
@@ -259,30 +328,12 @@ class PasswordResetController extends Controller
             ], 200);
 
         } catch (\Exception $e) {
+            \Log::error('Error en resetPassword: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error: ' . $e->getMessage(),
             ], 500);
         }
-    }
-
-    /**
-     * Buscar usuario para recuperación en usuarios o users
-     */
-    private function findPasswordResetUser(string $correo)
-    {
-        $usuario = Usuario::where('correo', $correo)->first();
-
-        if ($usuario) {
-            return $usuario;
-        }
-
-        $userQuery = User::where('email', $correo);
-        if (Schema::hasColumn('users', 'correo')) {
-            $userQuery->orWhere('correo', $correo);
-        }
-
-        return $userQuery->first();
     }
 
     /**
@@ -294,7 +345,10 @@ class PasswordResetController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'password_actual' => 'required|string',
-                'password_nueva' => 'required|string|min:8|confirmed',
+                'password_nueva' => 'required|string|min:6|confirmed',
+            ], [
+                'password_nueva.confirmed' => 'Las contraseñas no coinciden',
+                'password_nueva.min' => 'La contraseña debe tener al menos 6 caracteres',
             ]);
 
             if ($validator->fails()) {
@@ -305,17 +359,67 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
-            $usuario = $request->user();
-
-            if (!$usuario) {
+            $user = $request->user();
+            
+            if (!$user) {
                 return response()->json([
                     'success' => false,
                     'message' => 'No autenticado',
                 ], 401);
             }
 
+            // Buscar el usuario en las tablas correspondientes
+            $model = null;
+            $passwordField = null;
+            $currentPassword = null;
+            
+            // Buscar en clientes
+            $cliente = Cliente::where('id_cliente', $user->id)->first();
+            if ($cliente) {
+                $model = $cliente;
+                $passwordField = 'cli_password';
+                $currentPassword = $cliente->cli_password;
+            }
+            
+            // Buscar en empleados
+            if (!$model) {
+                $empleado = Empleado::where('id_empleados', $user->id)->first();
+                if ($empleado) {
+                    $model = $empleado;
+                    $passwordField = 'emp_password';
+                    $currentPassword = $empleado->emp_password;
+                }
+            }
+            
+            // Buscar en usuarios
+            if (!$model) {
+                $usuario = Usuario::where('id_usuario', $user->id)->first();
+                if ($usuario) {
+                    $model = $usuario;
+                    $passwordField = 'password';
+                    $currentPassword = $usuario->password;
+                }
+            }
+            
+            // Buscar en users
+            if (!$model) {
+                $userModel = User::where('id', $user->id)->first();
+                if ($userModel) {
+                    $model = $userModel;
+                    $passwordField = 'password';
+                    $currentPassword = $userModel->password;
+                }
+            }
+            
+            if (!$model) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado',
+                ], 404);
+            }
+
             // Verificar contraseña actual
-            if (!Hash::check($request->password_actual, $usuario->password)) {
+            if (!Hash::check($request->password_actual, $currentPassword)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'La contraseña actual es incorrecta',
@@ -323,9 +427,8 @@ class PasswordResetController extends Controller
             }
 
             // Actualizar contraseña
-            $usuario->update([
-                'password' => Hash::make($request->password_nueva),
-            ]);
+            $model->$passwordField = Hash::make($request->password_nueva);
+            $model->save();
 
             return response()->json([
                 'success' => true,
@@ -333,6 +436,7 @@ class PasswordResetController extends Controller
             ], 200);
 
         } catch (\Exception $e) {
+            \Log::error('Error en changePassword: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error: ' . $e->getMessage(),
