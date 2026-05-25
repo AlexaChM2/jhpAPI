@@ -6,9 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Ventas;
 use App\Models\Detalle_ventas;
 use App\Models\Producto;
-use App\Models\Cliente;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class VentasController extends Controller
 {
@@ -74,7 +74,7 @@ class VentasController extends Controller
                 'ven_fecha' => now(),
             ]);
 
-            // 3. Crear detalles (el descuento de stock es automático por el modelo)
+            // 3. Crear detalles y DESCONTAR stock manualmente
             foreach ($request->detalles as $item) {
                 Detalle_ventas::create([
                     'id_venta' => $venta->id_venta,
@@ -82,11 +82,18 @@ class VentasController extends Controller
                     'det_cantidad' => $item['cantidad'],
                     'det_precio_unitario' => $item['precio'],
                 ]);
+
+                // 🔥 DESCONTAR STOCK MANUALMENTE (SQL CRUDO)
+                DB::statement("UPDATE producto SET pro_stock = pro_stock - ? WHERE id_producto = ?", [
+                    $item['cantidad'],
+                    $item['id_producto']
+                ]);
+
+                Log::info("📦 VENTA: Descontado {$item['cantidad']} de producto #{$item['id_producto']}");
             }
 
             DB::commit();
 
-            // Cargar relaciones para respuesta
             $venta->load(['cliente', 'detalles.producto']);
 
             return response()->json([
@@ -97,6 +104,7 @@ class VentasController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('❌ VENTA Error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error al registrar la venta: ' . $e->getMessage()
@@ -107,23 +115,13 @@ class VentasController extends Controller
     // MOSTRAR VENTA
     public function show($id)
     {
-        $venta = Ventas::with([
-            'cliente', 
-            'empleado', 
-            'detalles.producto'
-        ])->find($id);
+        $venta = Ventas::with(['cliente', 'empleado', 'detalles.producto'])->find($id);
 
         if (!$venta) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Venta no encontrada'
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'Venta no encontrada'], 404);
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => $venta
-        ], 200);
+        return response()->json(['success' => true, 'data' => $venta], 200);
     }
 
     // ACTUALIZAR VENTA
@@ -143,40 +141,39 @@ class VentasController extends Controller
 
             $venta = Ventas::find($id);
             if (!$venta) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Venta no encontrada'
-                ], 404);
+                return response()->json(['success' => false, 'message' => 'Venta no encontrada'], 404);
             }
 
-            // Actualizar datos básicos de la venta
             $venta->update($request->only(['ven_total', 'tipo_pago']));
 
-            // Si se envían nuevos detalles, reemplazar los existentes
             if ($request->has('detalles')) {
                 // Validar stock de los nuevos productos
                 foreach ($request->detalles as $item) {
                     $producto = Producto::find($item['id_producto']);
                     if (!$producto) {
                         DB::rollBack();
-                        return response()->json([
-                            'success' => false,
-                            'message' => "Producto ID {$item['id_producto']} no encontrado"
-                        ], 404);
+                        return response()->json(['success' => false, 'message' => "Producto no encontrado"], 404);
                     }
                     if ($producto->pro_stock < $item['cantidad']) {
                         DB::rollBack();
-                        return response()->json([
-                            'success' => false,
-                            'message' => "Stock insuficiente para: {$producto->pro_nombre}"
-                        ], 422);
+                        return response()->json(['success' => false, 'message' => "Stock insuficiente para: {$producto->pro_nombre}"], 422);
                     }
                 }
 
-                // Eliminar detalles anteriores (devuelve stock automáticamente)
+                // 1. REPONER stock de detalles anteriores
+                $detallesViejos = Detalle_ventas::where('id_venta', $id)->get();
+                foreach ($detallesViejos as $viejo) {
+                    DB::statement("UPDATE producto SET pro_stock = pro_stock + ? WHERE id_producto = ?", [
+                        $viejo->det_cantidad,
+                        $viejo->id_producto
+                    ]);
+                    Log::info("🔄 VENTA UPDATE: Repuesto {$viejo->det_cantidad} de producto #{$viejo->id_producto}");
+                }
+
+                // 2. Eliminar detalles anteriores
                 Detalle_ventas::where('id_venta', $id)->delete();
 
-                // Crear nuevos detalles (descuenta stock automáticamente)
+                // 3. Crear nuevos detalles y DESCONTAR
                 foreach ($request->detalles as $item) {
                     Detalle_ventas::create([
                         'id_venta' => $id,
@@ -184,6 +181,12 @@ class VentasController extends Controller
                         'det_cantidad' => $item['cantidad'],
                         'det_precio_unitario' => $item['precio'],
                     ]);
+
+                    DB::statement("UPDATE producto SET pro_stock = pro_stock - ? WHERE id_producto = ?", [
+                        $item['cantidad'],
+                        $item['id_producto']
+                    ]);
+                    Log::info("📦 VENTA UPDATE: Descontado {$item['cantidad']} de producto #{$item['id_producto']}");
                 }
             }
 
@@ -191,18 +194,12 @@ class VentasController extends Controller
 
             $venta->load(['cliente', 'detalles.producto']);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Venta actualizada exitosamente',
-                'data' => $venta
-            ], 200);
+            return response()->json(['success' => true, 'message' => 'Venta actualizada', 'data' => $venta], 200);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al actualizar la venta: ' . $e->getMessage()
-            ], 500);
+            Log::error('❌ VENTA UPDATE Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
         }
     }
 
@@ -214,31 +211,31 @@ class VentasController extends Controller
 
             $venta = Ventas::find($id);
             if (!$venta) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Venta no encontrada'
-                ], 404);
+                return response()->json(['success' => false, 'message' => 'Venta no encontrada'], 404);
             }
 
-            // Eliminar detalles (devuelve stock automáticamente por el evento deleted)
-            Detalle_ventas::where('id_venta', $id)->delete();
+            // Reponer stock de todos los detalles
+            $detalles = Detalle_ventas::where('id_venta', $id)->get();
+            foreach ($detalles as $detalle) {
+                DB::statement("UPDATE producto SET pro_stock = pro_stock + ? WHERE id_producto = ?", [
+                    $detalle->det_cantidad,
+                    $detalle->id_producto
+                ]);
+                Log::info("🔄 VENTA DESTROY: Repuesto {$detalle->det_cantidad} de producto #{$detalle->id_producto}");
+            }
 
-            // Eliminar venta
+            // Eliminar detalles y venta
+            Detalle_ventas::where('id_venta', $id)->delete();
             $venta->delete();
 
             DB::commit();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Venta eliminada y stock devuelto exitosamente'
-            ], 200);
+            return response()->json(['success' => true, 'message' => 'Venta eliminada y stock devuelto'], 200);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al eliminar la venta: ' . $e->getMessage()
-            ], 500);
+            Log::error('❌ VENTA DESTROY Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
         }
     }
 }
