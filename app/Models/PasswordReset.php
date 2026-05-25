@@ -32,14 +32,6 @@ class PasswordReset extends Model
     ];
 
     /**
-     * Relación con Usuario
-     */
-    public function usuario()
-    {
-        return $this->belongsTo(Usuario::class, 'id_usuario', 'id_usuario');
-    }
-
-    /**
      * Generar token único de recuperación
      */
     public static function generateToken()
@@ -53,7 +45,7 @@ class PasswordReset extends Model
     public static function crearSolicitud($idUsuario, $correo, $request = null)
     {
         $token = self::generateToken();
-        $horasExpiracion = 24; // Token válido por 24 horas
+        $horasExpiracion = 24;
 
         return self::create([
             'id_usuario' => $idUsuario,
@@ -61,6 +53,7 @@ class PasswordReset extends Model
             'correo' => $correo,
             'fecha_solicitud' => now(),
             'fecha_expiracion' => now()->addHours($horasExpiracion),
+            'utilizado' => false,
             'ip_solicitud' => $request ? $request->ip() : null,
             'user_agent' => $request ? $request->userAgent() : null,
         ]);
