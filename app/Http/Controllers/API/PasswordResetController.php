@@ -9,16 +9,17 @@ use App\Models\PasswordReset;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\PasswordResetMail;
 
 class PasswordResetController extends Controller
 {
     /**
-     * Solicitar recuperación de contraseña - VERSIÓN SIMPLIFICADA
+     * Solicitar recuperación de contraseña - CON ENVÍO DE CORREO
      */
     public function requestReset(Request $request)
     {
         try {
-            // Registrar intento para depuración
             \Log::info('requestReset llamado', ['correo' => $request->correo]);
             
             $validator = Validator::make($request->all(), [
@@ -36,6 +37,7 @@ class PasswordResetController extends Controller
             // Buscar el usuario
             $usuario = Cliente::where('cli_correo', $request->correo)->first();
             $tipo = 'cliente';
+            $nombre = '';
             
             if (!$usuario) {
                 $usuario = Empleado::where('emp_correo', $request->correo)->first();
@@ -52,6 +54,7 @@ class PasswordResetController extends Controller
             // Obtener datos
             $userId = ($tipo === 'cliente') ? $usuario->id_cliente : $usuario->id_empleados;
             $email = ($tipo === 'cliente') ? $usuario->cli_correo : $usuario->emp_correo;
+            $nombre = ($tipo === 'cliente') ? $usuario->cli_nombre : $usuario->emp_nombre;
 
             // Crear token
             $token = hash('sha256', \Illuminate\Support\Str::random(60));
@@ -66,14 +69,31 @@ class PasswordResetController extends Controller
                 'utilizado' => false,
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Token generado correctamente',
-                'data' => [
-                    'token' => $token,
-                    'correo' => $email,
-                ]
-            ], 200);
+            // ==========================================
+            // ENVIAR CORREO ELECTRÓNICO
+            // ==========================================
+            try {
+                Mail::to($email)->send(new PasswordResetMail($usuario, $token, $nombre, $email));
+                \Log::info('Correo enviado a: ' . $email);
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Hemos enviado las instrucciones de recuperación a tu correo electrónico',
+                ], 200);
+                
+            } catch (\Exception $mailException) {
+                \Log::error('Error enviando email: ' . $mailException->getMessage());
+                
+                // Si falla el envío, devolvemos el token para pruebas
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Token generado pero no se pudo enviar el correo',
+                    'data' => [
+                        'token' => $token,
+                        'correo' => $email,
+                    ]
+                ], 200);
+            }
 
         } catch (\Exception $e) {
             \Log::error('Error en requestReset: ' . $e->getMessage() . ' - Línea: ' . $e->getLine());
@@ -83,6 +103,9 @@ class PasswordResetController extends Controller
             ], 500);
         }
     }
+
+    // El resto de métodos (resetPassword, validateToken, changePassword) se mantienen igual...
+
 
     /**
      * Resetear contraseña
