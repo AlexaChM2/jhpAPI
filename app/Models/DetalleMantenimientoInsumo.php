@@ -7,7 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 class DetalleMantenimientoInsumo extends Model
 {
     protected $table = 'detalle_mantenimiento_insumos';
-    protected $primaryKey = 'id_detalle_mantenimiento_insumos';
+    
+    // 🔥 CORREGIR: La primary key real en la BD es 'id_det_mant'
+    protected $primaryKey = 'id_det_mant';
+    
     public $timestamps = false;
 
     protected $fillable = [
@@ -16,13 +19,6 @@ class DetalleMantenimientoInsumo extends Model
         'insumo_cantidad',
         'insumo_precio_unitario'
     ];
-
-    // DESACTIVAR TODOS LOS EVENTOS DEL MODELO
-    public $dispatchesEvents = [];
-    
-    protected $observables = [];
-    
-    protected static $events = [];
 
     public function producto()
     {
@@ -34,18 +30,9 @@ class DetalleMantenimientoInsumo extends Model
         return $this->belongsTo(Mantenimiento::class, 'id_mantenimiento', 'id_mantenimiento');
     }
 
-    // FORZAR sin eventos
+    // SIN EVENTOS AUTOMÁTICOS
     protected static function boot()
     {
         parent::boot();
-        
-        // Eliminar explícitamente cualquier evento registrado
-        static::flushEventListeners();
-    }
-    
-    // Sobrescribir para que NUNCA dispare eventos
-    protected static function booted()
-    {
-        // Vacío intencionalmente
     }
 }
