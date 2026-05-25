@@ -1,22 +1,5 @@
 <?php
 
-// ==========================================
-// PRIMERO: RUTA DE PRUEBA MANUAL PARA PASSWORD-RESET
-// ==========================================
-Route::post('/password-reset/request', function() {
-    return response()->json([
-        'success' => true,
-        'message' => 'Ruta de prueba funcionando correctamente',
-        'data' => [
-            'token' => 'test-token-manual-12345',
-            'correo' => request('correo')
-        ]
-    ]);
-});
-
-// ==========================================
-// RESTO DE IMPORTS
-// ==========================================
 use App\Http\Controllers\API\ClimaController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\CategoriasController;
@@ -71,15 +54,15 @@ Route::prefix('auth')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| Rutas de Recuperación de Contraseña (COMENTADAS - USAMOS LA RUTA MANUAL)
+| Rutas de Recuperación de Contraseña (Públicas)
 |--------------------------------------------------------------------------
 */
-// Route::prefix('password-reset')->group(function () {
-//     Route::post('request', [PasswordResetController::class, 'requestReset']);
-//     Route::post('validate-token', [PasswordResetController::class, 'validateToken']);
-//     Route::post('reset', [PasswordResetController::class, 'resetPassword']);
-//     Route::post('change', [PasswordResetController::class, 'changePassword'])->middleware('auth:sanctum');
-// });
+Route::prefix('password-reset')->group(function () {
+    Route::post('request', [PasswordResetController::class, 'requestReset']);
+    Route::post('validate-token', [PasswordResetController::class, 'validateToken']);
+    Route::post('reset', [PasswordResetController::class, 'resetPassword']);
+    Route::post('change', [PasswordResetController::class, 'changePassword'])->middleware('auth:sanctum');
+});
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('usuarios', UsuarioController::class);
