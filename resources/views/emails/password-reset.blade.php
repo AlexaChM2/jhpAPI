@@ -152,7 +152,7 @@
         <!-- Content -->
         <div class="content">
             <div class="greeting">
-                <p>¡Hola {{ $usuario->correo ?? $usuario->email }}!</p>
+               <p>¡Hola {{ $usuario->cli_correo ?? $usuario->emp_correo ?? $usuario->correo ?? $usuario->email }}!</p>
                 <p>Hemos recibido una solicitud para recuperar tu contraseña en JHP API. Si no fuiste tú, puedes ignorar este correo de forma segura.</p>
             </div>
             
