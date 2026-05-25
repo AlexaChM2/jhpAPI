@@ -45,7 +45,7 @@ class CotizacionesController extends Controller
             'cot_vigencia_dias' => 'nullable|integer|min:1|max:90',
             'cot_total' => 'required|numeric|min:0',
             'detalles' => 'required|array|min:1',
-            'detalles.*.id_producto' => 'required|exists:Producto,id_producto',
+            'detalles.*.id_producto' => 'required|exists:producto,id_producto',
             'detalles.*.det_cantidad' => 'required|integer|min:1',
             'detalles.*.det_precio_unitario' => 'required|numeric|min:0',
         ], [
@@ -140,7 +140,7 @@ class CotizacionesController extends Controller
             'cot_vigencia_dias' => 'nullable|integer|min:1|max:90',
             'cot_total' => 'required|numeric|min:0',
             'detalles' => 'required|array|min:1',
-            'detalles.*.id_producto' => 'required|exists:Producto,id_producto',
+            'detalles.*.id_producto' => 'required|exists:producto,id_producto',
             'detalles.*.det_cantidad' => 'required|integer|min:1',
             'detalles.*.det_precio_unitario' => 'required|numeric|min:0',
         ]);
