@@ -28,45 +28,10 @@ class Detalle_ventas extends Model
         return $this->belongsTo(Producto::class, 'id_producto', 'id_producto');
     }
 
-    /**
-     * Boot: eventos del modelo
-     */
+    // ❌ SIN EVENTOS - Stock manejado en VentasController
     protected static function boot()
     {
         parent::boot();
-
-        // Al CREAR un detalle, descontar stock
-        static::created(function ($detalle) {
-            $producto = Producto::find($detalle->id_producto);
-            if ($producto) {
-                $producto->descontarStock($detalle->det_cantidad);
-            }
-        });
-
-        // Al ELIMINAR un detalle, devolver stock
-        static::deleted(function ($detalle) {
-            $producto = Producto::find($detalle->id_producto);
-            if ($producto) {
-                $producto->devolverStock($detalle->det_cantidad);
-            }
-        });
-
-        // Al ACTUALIZAR cantidad, ajustar stock
-        static::updated(function ($detalle) {
-            if ($detalle->isDirty('det_cantidad')) {
-                $original = $detalle->getOriginal('det_cantidad');
-                $nueva = $detalle->det_cantidad;
-                $diferencia = $original - $nueva;
-                
-                $producto = Producto::find($detalle->id_producto);
-                if ($producto) {
-                    if ($diferencia > 0) {
-                        $producto->devolverStock(abs($diferencia));
-                    } elseif ($diferencia < 0) {
-                        $producto->descontarStock(abs($diferencia));
-                    }
-                }
-            }
-        });
+        // NADA aquí - el controller maneja el stock con SQL crudo
     }
 }
