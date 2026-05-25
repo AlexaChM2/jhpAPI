@@ -12,53 +12,34 @@ class PasswordResetMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public $usuario;
+    public $nombre;
     public $token;
     public $resetUrl;
 
-    /**
-     * Create a new message instance.
-     */
-    public function __construct($usuario, $token)
+    public function __construct($usuario, $token, $nombre, $email)
     {
-        $this->usuario = $usuario;
+        $this->nombre = $nombre;
         $this->token = $token;
-        $this->resetUrl = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/')
-            . '/recuperar-contrasena?token=' . urlencode($token);
+        $this->resetUrl = rtrim(env('FRONTEND_URL', 'https://jhp-frontend-production.up.railway.app'), '/') 
+            . '/reset-password.html?token=' . urlencode($token) . '&email=' . urlencode($email);
     }
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Token de recuperacion de contrasena - JHP Motos POS',
+            subject: 'Recuperación de Contraseña - JHP Motos POS',
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
     public function content(): Content
     {
         return new Content(
             view: 'emails.password-reset',
             with: [
-                'usuario' => $this->usuario,
+                'nombre' => $this->nombre,
                 'resetUrl' => $this->resetUrl,
                 'token' => $this->token,
             ],
         );
-    }
-
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
-     */
-    public function attachments(): array
-    {
-        return [];
     }
 }
