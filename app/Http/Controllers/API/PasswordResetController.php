@@ -36,8 +36,14 @@ class PasswordResetController extends Controller
         ])->save();
 
         try {
-            Mail::raw(
-                "Tu token de recuperación JHP es: {$token}\n\nEste token vence en 15 minutos.",
+            Mail::send(
+                'emails.password-reset',
+                [
+                    'token' => $token,
+                    'correo' => $request->correo,
+                    'expiresIn' => 15,
+                    'resetUrl' => $this->buildResetUrl($request->correo, $token),
+                ],
                 function ($message) use ($request) {
                     $message->to($request->correo)->subject('Recuperación de contraseña JHP');
                 }
@@ -50,7 +56,7 @@ class PasswordResetController extends Controller
 
             if (app()->environment('local')) {
                 return response()->json([
-                    'message' => 'Token generado. Configura Gmail para enviarlo por correo.',
+                    'message' => 'Token generado. Configura Resend para enviarlo por correo.',
                     'correo' => $request->correo,
                     'token' => $token,
                 ]);
@@ -81,10 +87,10 @@ class PasswordResetController extends Controller
         $user = $this->findValidToken($request->correo, $request->token);
 
         if (!$user) {
-            return response()->json(['message' => 'Token invalido o expirado'], 422);
+            return response()->json(['message' => 'Token inválido o expirado'], 422);
         }
 
-        return response()->json(['message' => 'Token valido']);
+        return response()->json(['message' => 'Token válido']);
     }
 
     public function reset(Request $request)
@@ -102,7 +108,7 @@ class PasswordResetController extends Controller
         $user = $this->findValidToken($request->correo, $request->token);
 
         if (!$user) {
-            return response()->json(['message' => 'Token invalido o expirado'], 422);
+            return response()->json(['message' => 'Token inválido o expirado'], 422);
         }
 
         $passwordField = $user instanceof Cliente ? 'cli_password' : 'emp_password';
@@ -132,5 +138,16 @@ class PasswordResetController extends Controller
                 ->where('reset_password', $token)
                 ->where('reset_password_expires', '>', now())
                 ->first();
+    }
+
+    private function buildResetUrl(string $correo, string $token): ?string
+    {
+        $frontendUrl = rtrim((string) env('FRONTEND_URL', ''), '/');
+
+        if ($frontendUrl === '') {
+            return null;
+        }
+
+        return $frontendUrl . '/password-reset?correo=' . urlencode($correo) . '&token=' . urlencode($token);
     }
 }
