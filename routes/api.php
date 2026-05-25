@@ -120,6 +120,7 @@ Route::delete('/proveedor-visitas/{id}', [ProveedorVisitasController::class, 'de
 
 Route::apiResource('proveedores', ProveedoresController::class);
 Route::apiResource('categorias', CategoriasController::class);
+Route::put('/categorias/{id}', [CategoriasController::class, 'update']);
 
 Route::prefix('clima')->group(function () {
    

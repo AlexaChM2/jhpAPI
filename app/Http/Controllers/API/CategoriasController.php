@@ -31,7 +31,7 @@ class CategoriasController extends Controller
 
     // MOSTRAR UNA CATEGORÍA POR ID
     public function show($id)
-    {
+    {   
         // findOrFail buscará automáticamente por 'id_categoria' 
         // porque así lo definiste en el modelo.
         return response()->json(
@@ -41,15 +41,16 @@ class CategoriasController extends Controller
 
     // ACTUALIZAR CATEGORÍA
     public function update(Request $request, $id)
-    {
-        $categoria = Categorias::findOrFail($id);
-        $categoria->update($request->all());
-
-        return response()->json([
-            'message' => 'Categoría actualizada correctamente',
-            'data' => $categoria
-        ], 200);
-    }
+{
+    $categoria = Categorias::findOrFail($id);
+    $categoria->update($request->only(['cat_nombre', 'cat_descripcion']));
+    
+    return response()->json([
+        'success' => true,
+        'data' => $categoria,
+        'message' => 'Categoría actualizada correctamente'
+    ]);
+}
 
     // ELIMINAR CATEGORÍA
     public function destroy($id)
