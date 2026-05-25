@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'auth/*', 'password-reset/*'],  // ← Agrega 'password-reset/*'
 
     'allowed_methods' => ['*'],
 
@@ -15,5 +15,5 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => false,  // ← CAMBIAR A false
+    'supports_credentials' => false,
 ];

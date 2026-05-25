@@ -12,6 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Agrega CORS como middleware global
+        $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
+        
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
             'cliente.propietario' => \App\Http\Middleware\ClientePropietario::class,
