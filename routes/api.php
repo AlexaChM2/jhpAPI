@@ -111,23 +111,7 @@ Route::apiResource('producto', ProductoController::class);
 Route::apiResource('inventario', InventarioController::class);
 Route::apiResource('inventarios', InventarioController::class);
 
-// ==========================================
-// RUTAS DE VISITAS (DEBEN IR PRIMERO)
-// ==========================================
-Route::get('/proveedores/{idProveedor}/visitas', [ProveedorVisitasController::class, 'index']);
-Route::get('/proveedores/{idProveedor}/proxima-visita', [ProveedorVisitasController::class, 'proximaVisita']);
-Route::post('/proveedor-visitas', [ProveedorVisitasController::class, 'store']);
-Route::put('/proveedor-visitas/{id}', [ProveedorVisitasController::class, 'update']);
-Route::delete('/proveedor-visitas/{id}', [ProveedorVisitasController::class, 'destroy']);
 
-// ==========================================
-// RUTAS DE PROVEEDORES (DESPUÉS)
-// ==========================================
-Route::get('/proveedores', [ProveedoresController::class, 'index']);
-Route::post('/proveedores', [ProveedoresController::class, 'store']);
-Route::get('/proveedores/{id}', [ProveedoresController::class, 'show']);
-Route::put('/proveedores/{id}', [ProveedoresController::class, 'update']);
-Route::delete('/proveedores/{id}', [ProveedoresController::class, 'destroy']);
 
 Route::apiResource('proveedores', ProveedoresController::class);
 Route::apiResource('categorias', CategoriasController::class);
