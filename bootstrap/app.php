@@ -15,8 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Agrega CORS como middleware global
         $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
         
+        // Solo mantener el middleware que sí existe
         $middleware->alias([
-            'role' => \App\Http\Middleware\CheckRole::class,
             'cliente.propietario' => \App\Http\Middleware\ClientePropietario::class,
         ]);
     })
