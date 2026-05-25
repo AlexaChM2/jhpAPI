@@ -4,7 +4,6 @@ namespace App\Http\Controllers\API;
 
 use App\Models\Mantenimiento;
 use App\Models\Citas;
-use App\Models\Producto;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +29,14 @@ class MantenimientoController extends Controller
         $mantenimiento = Mantenimiento::with([
             'cliente', 'mecanico', 'cita',
             'insumos.producto', 'servicios.servicio'
-        ])->findOrFail($id);
+        ])->find($id);
+
+        if (!$mantenimiento) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Mantenimiento no encontrado'
+            ], 404);
+        }
 
         return response()->json([
             'success' => true,
@@ -38,6 +44,9 @@ class MantenimientoController extends Controller
         ], 200);
     }
 
+    /**
+     * CREAR - Con protección anti-duplicados
+     */
     public function store(Request $request)
     {
         $request->validate([
@@ -60,30 +69,44 @@ class MantenimientoController extends Controller
         try {
             DB::beginTransaction();
 
-            // Validar stock
-            if ($request->has('insumos')) {
+            // 🔥 COMBINAR DUPLICADOS antes de procesar
+            $insumosUnicos = [];
+            if ($request->has('insumos') && count($request->insumos) > 0) {
                 foreach ($request->insumos as $insumo) {
-                    $producto = DB::table('producto')->where('id_producto', $insumo['id_producto'])->first();
-                    if (!$producto) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => "Producto no encontrado"], 404);
+                    $idProd = $insumo['id_producto'];
+                    if (isset($insumosUnicos[$idProd])) {
+                        // Ya existe: SUMAR cantidades
+                        $insumosUnicos[$idProd]['insumo_cantidad'] += $insumo['insumo_cantidad'];
+                    } else {
+                        // Nuevo: agregar
+                        $insumosUnicos[$idProd] = $insumo;
                     }
-                    if ($producto->pro_stock < $insumo['insumo_cantidad']) {
-                        DB::rollBack();
-                        return response()->json([
-                            'success' => false,
-                            'message' => "Stock insuficiente para '{$producto->pro_nombre}'. Stock: {$producto->pro_stock}"
-                        ], 422);
-                    }
+                }
+            }
+
+            // Validar stock
+            foreach ($insumosUnicos as $insumo) {
+                $producto = DB::table('producto')->where('id_producto', $insumo['id_producto'])->first();
+                if (!$producto) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Producto #{$insumo['id_producto']} no encontrado"
+                    ], 404);
+                }
+                if ($producto->pro_stock < $insumo['insumo_cantidad']) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Stock insuficiente para '{$producto->pro_nombre}'. Stock: {$producto->pro_stock}, Solicitado: {$insumo['insumo_cantidad']}"
+                    ], 422);
                 }
             }
 
             // Calcular totales
             $total_insumos = 0;
-            if ($request->has('insumos')) {
-                foreach ($request->insumos as $i) {
-                    $total_insumos += $i['insumo_cantidad'] * $i['insumo_precio_unitario'];
-                }
+            foreach ($insumosUnicos as $insumo) {
+                $total_insumos += $insumo['insumo_cantidad'] * $insumo['insumo_precio_unitario'];
             }
 
             $total_servicios = 0;
@@ -107,26 +130,25 @@ class MantenimientoController extends Controller
                 'estado_servicio' => $request->estado_servicio ?? 'En Proceso',
             ]);
 
-            // Registrar insumos y DESCONTAR stock
-            if ($request->has('insumos')) {
-                foreach ($request->insumos as $insumo) {
-                    // Insertar detalle
-                    DB::table('detalle_mantenimiento_insumos')->insert([
-                        'id_mantenimiento' => $idMant,
-                        'id_producto' => $insumo['id_producto'],
-                        'insumo_cantidad' => $insumo['insumo_cantidad'],
-                        'insumo_precio_unitario' => $insumo['insumo_precio_unitario'],
-                    ]);
+            // Insertar insumos y DESCONTAR stock
+            foreach ($insumosUnicos as $insumo) {
+                DB::table('detalle_mantenimiento_insumos')->insert([
+                    'id_mantenimiento' => $idMant,
+                    'id_producto' => $insumo['id_producto'],
+                    'insumo_cantidad' => $insumo['insumo_cantidad'],
+                    'insumo_precio_unitario' => $insumo['insumo_precio_unitario'],
+                ]);
 
-                    // Descontar stock - UNA SOLA VEZ
-                    DB::table('producto')
-                        ->where('id_producto', $insumo['id_producto'])
-                        ->decrement('pro_stock', $insumo['insumo_cantidad']);
-                }
+                // DESCONTAR STOCK
+                DB::table('producto')
+                    ->where('id_producto', $insumo['id_producto'])
+                    ->decrement('pro_stock', $insumo['insumo_cantidad']);
+
+                Log::info("📦 STORE: Descontado {$insumo['insumo_cantidad']} de producto #{$insumo['id_producto']}");
             }
 
-            // Registrar servicios
-            if ($request->has('servicios')) {
+            // Insertar servicios
+            if ($request->has('servicios') && count($request->servicios) > 0) {
                 foreach ($request->servicios as $servicio) {
                     DB::table('detalle_mantenimiento_servicios')->insert([
                         'id_mantenimiento' => $idMant,
@@ -144,22 +166,29 @@ class MantenimientoController extends Controller
 
             DB::commit();
 
-            $mantenimiento = Mantenimiento::with(['cliente', 'mecanico', 'cita', 'insumos.producto', 'servicios.servicio'])
-                ->find($idMant);
+            $mantenimiento = Mantenimiento::with([
+                'cliente', 'mecanico', 'cita', 'insumos.producto', 'servicios.servicio'
+            ])->find($idMant);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Mantenimiento creado.',
+                'message' => 'Mantenimiento creado. Stock actualizado.',
                 'data' => $mantenimiento
             ], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('STORE Error: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            Log::error('❌ STORE Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
         }
     }
 
+    /**
+     * ACTUALIZAR - Con protección anti-duplicados
+     */
     public function update(Request $request, $id)
     {
         $request->validate([
@@ -180,46 +209,77 @@ class MantenimientoController extends Controller
         try {
             DB::beginTransaction();
 
-            // Actualizar datos básicos
-            DB::table('mantenimiento')->where('id_mantenimiento', $id)->update($request->only([
-                'id_mecanico', 'moto_modelo', 'moto_llegada_descripcion',
-                'trabajo_realizado', 'fecha_inicio', 'fecha_termino', 'estado_servicio'
-            ]));
+            $mantenimiento = Mantenimiento::find($id);
+            if (!$mantenimiento) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Mantenimiento no encontrado'
+                ], 404);
+            }
 
-            if ($request->has('insumos')) {
-                // REPONER stock viejo
+            // Actualizar datos básicos
+            DB::table('mantenimiento')->where('id_mantenimiento', $id)->update([
+                'id_mecanico' => $request->id_mecanico,
+                'moto_modelo' => $request->moto_modelo,
+                'moto_llegada_descripcion' => $request->moto_llegada_descripcion,
+                'trabajo_realizado' => $request->trabajo_realizado,
+                'fecha_inicio' => $request->fecha_inicio,
+                'fecha_termino' => $request->fecha_termino,
+                'estado_servicio' => $request->estado_servicio,
+            ]);
+
+            // 🔥 COMBINAR DUPLICADOS antes de procesar
+            $insumosUnicos = [];
+            if ($request->has('insumos') && count($request->insumos) > 0) {
+                foreach ($request->insumos as $insumo) {
+                    $idProd = $insumo['id_producto'];
+                    if (isset($insumosUnicos[$idProd])) {
+                        $insumosUnicos[$idProd]['insumo_cantidad'] += $insumo['insumo_cantidad'];
+                    } else {
+                        $insumosUnicos[$idProd] = $insumo;
+                    }
+                }
+            }
+
+            if (count($insumosUnicos) > 0) {
+                // 1. REPONER stock de insumos viejos
                 $insumosViejos = DB::table('detalle_mantenimiento_insumos')
                     ->where('id_mantenimiento', $id)->get();
-                
+
                 foreach ($insumosViejos as $viejo) {
                     DB::table('producto')
                         ->where('id_producto', $viejo->id_producto)
                         ->increment('pro_stock', $viejo->insumo_cantidad);
+
+                    Log::info("🔄 UPDATE: Repuesto {$viejo->insumo_cantidad} de producto #{$viejo->id_producto}");
                 }
 
-                // Eliminar insumos viejos
+                // 2. ELIMINAR insumos viejos
                 DB::table('detalle_mantenimiento_insumos')
                     ->where('id_mantenimiento', $id)->delete();
 
-                // Validar stock para nuevos
-                foreach ($request->insumos as $insumo) {
-                    $producto = DB::table('producto')->where('id_producto', $insumo['id_producto'])->first();
+                // 3. Validar stock para NUEVOS
+                foreach ($insumosUnicos as $insumo) {
+                    $producto = DB::table('producto')
+                        ->where('id_producto', $insumo['id_producto'])->first();
+
                     if ($producto && $producto->pro_stock < $insumo['insumo_cantidad']) {
-                        // Revertir
+                        // Revertir reposición
                         foreach ($insumosViejos as $viejo) {
-                            DB::table('producto')->where('id_producto', $viejo->id_producto)
+                            DB::table('producto')
+                                ->where('id_producto', $viejo->id_producto)
                                 ->decrement('pro_stock', $viejo->insumo_cantidad);
                         }
                         DB::rollBack();
                         return response()->json([
                             'success' => false,
-                            'message' => "Stock insuficiente para '{$producto->pro_nombre}'"
+                            'message' => "Stock insuficiente para '{$producto->pro_nombre}'. Stock: {$producto->pro_stock}, Solicitado: {$insumo['insumo_cantidad']}"
                         ], 422);
                     }
                 }
 
-                // Crear nuevos y descontar
-                foreach ($request->insumos as $insumo) {
+                // 4. INSERTAR nuevos y DESCONTAR
+                foreach ($insumosUnicos as $insumo) {
                     DB::table('detalle_mantenimiento_insumos')->insert([
                         'id_mantenimiento' => $id,
                         'id_producto' => $insumo['id_producto'],
@@ -230,11 +290,16 @@ class MantenimientoController extends Controller
                     DB::table('producto')
                         ->where('id_producto', $insumo['id_producto'])
                         ->decrement('pro_stock', $insumo['insumo_cantidad']);
+
+                    Log::info("📦 UPDATE: Descontado {$insumo['insumo_cantidad']} de producto #{$insumo['id_producto']}");
                 }
             }
 
+            // Procesar servicios
             if ($request->has('servicios')) {
-                DB::table('detalle_mantenimiento_servicios')->where('id_mantenimiento', $id)->delete();
+                DB::table('detalle_mantenimiento_servicios')
+                    ->where('id_mantenimiento', $id)->delete();
+
                 foreach ($request->servicios as $servicio) {
                     DB::table('detalle_mantenimiento_servicios')->insert([
                         'id_mantenimiento' => $id,
@@ -259,44 +324,73 @@ class MantenimientoController extends Controller
 
             DB::commit();
 
-            $mantenimiento = Mantenimiento::with(['cliente', 'mecanico', 'cita', 'insumos.producto', 'servicios.servicio'])
-                ->find($id);
+            $mantenimiento = Mantenimiento::with([
+                'cliente', 'mecanico', 'cita', 'insumos.producto', 'servicios.servicio'
+            ])->find($id);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Mantenimiento actualizado.',
+                'message' => 'Mantenimiento actualizado. Stock ajustado.',
                 'data' => $mantenimiento
             ], 200);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('UPDATE Error: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            Log::error('❌ UPDATE Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
         }
     }
 
+    /**
+     * ELIMINAR - Repone stock
+     */
     public function destroy($id)
     {
         try {
             DB::beginTransaction();
 
-            $insumos = DB::table('detalle_mantenimiento_insumos')->where('id_mantenimiento', $id)->get();
-            foreach ($insumos as $insumo) {
-                DB::table('producto')->where('id_producto', $insumo->id_producto)
-                    ->increment('pro_stock', $insumo->insumo_cantidad);
+            $mantenimiento = Mantenimiento::find($id);
+            if (!$mantenimiento) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Mantenimiento no encontrado'
+                ], 404);
             }
 
+            // Reponer stock de todos los insumos
+            $insumos = DB::table('detalle_mantenimiento_insumos')
+                ->where('id_mantenimiento', $id)->get();
+
+            foreach ($insumos as $insumo) {
+                DB::table('producto')
+                    ->where('id_producto', $insumo->id_producto)
+                    ->increment('pro_stock', $insumo->insumo_cantidad);
+
+                Log::info("🔄 DESTROY: Repuesto {$insumo->insumo_cantidad} de producto #{$insumo->id_producto}");
+            }
+
+            // Eliminar insumos, servicios y mantenimiento
             DB::table('detalle_mantenimiento_insumos')->where('id_mantenimiento', $id)->delete();
             DB::table('detalle_mantenimiento_servicios')->where('id_mantenimiento', $id)->delete();
             DB::table('mantenimiento')->where('id_mantenimiento', $id)->delete();
 
             DB::commit();
 
-            return response()->json(['success' => true, 'message' => 'Eliminado.'], 200);
+            return response()->json([
+                'success' => true,
+                'message' => 'Mantenimiento eliminado. Stock devuelto.'
+            ], 200);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            Log::error('❌ DESTROY Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
         }
     }
 }
