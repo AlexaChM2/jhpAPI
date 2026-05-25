@@ -28,6 +28,27 @@ use App\Http\Controllers\API\InventarioController;
 use App\Http\Controllers\API\ProveedorVisitasController;
 use App\Http\Controllers\API\MarcaController;
 
+
+
+// RUTA PARA LIMPIAR CACHÉ - ELIMINAR DESPUÉS
+Route::get('/clear-cache', function() {
+    try {
+        \Artisan::call('route:clear');
+        \Artisan::call('config:clear');
+        \Artisan::call('cache:clear');
+        return response()->json([
+            'success' => true,
+            'message' => 'Caché limpiada correctamente'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ]);
+    }
+});
+
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
