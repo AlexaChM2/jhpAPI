@@ -21,6 +21,7 @@ use App\Http\Controllers\API\ServiciosController;
 use App\Http\Controllers\API\VentasController;
 use App\Http\Controllers\API\DetalleCotizacionController;
 use App\Http\Controllers\API\ReporteController;
+use App\Http\Controllers\API\PasswordResetController;
 use App\Models\Detalle_cotizaciones;
 
 /*
@@ -34,6 +35,13 @@ Route::get('/', function () {
         'status' => 'API funcionando correctamente'
     ]);
 });
+
+Route::post('password/forgot', [PasswordResetController::class, 'requestToken']);
+Route::post('password/validate-token', [PasswordResetController::class, 'validateToken']);
+Route::post('password/reset', [PasswordResetController::class, 'reset']);
+Route::post('auth/password-reset/request', [PasswordResetController::class, 'requestToken']);
+Route::post('auth/password-reset/validate', [PasswordResetController::class, 'validateToken']);
+Route::post('auth/password-reset/reset', [PasswordResetController::class, 'reset']);
 
 
 Route::apiResource('citas', CitasController::class);
