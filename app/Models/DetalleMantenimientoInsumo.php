@@ -7,66 +7,48 @@ use Illuminate\Database\Eloquent\Model;
 class DetalleMantenimientoInsumo extends Model
 {
     protected $table = 'detalle_mantenimiento_insumos';
-    protected $primaryKey = 'id_det_mant';
+    protected $primaryKey = 'id_detalle_mantenimiento_insumos';
     public $timestamps = false;
 
     protected $fillable = [
         'id_mantenimiento',
         'id_producto',
         'insumo_cantidad',
-        'insumo_precio_unitario',
+        'insumo_precio_unitario'
     ];
 
-    // Relaciones
-    public function mantenimiento()
-    {
-        return $this->belongsTo(Mantenimiento::class, 'id_mantenimiento', 'id_mantenimiento');
-    }
-
+    // Relación con producto
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto', 'id_producto');
     }
 
-    /**
-     * Boot: eventos del modelo
-     */
+    // Relación con mantenimiento
+    public function mantenimiento()
+    {
+        return $this->belongsTo(Mantenimiento::class, 'id_mantenimiento', 'id_mantenimiento');
+    }
+
+    // ❌ ELIMINAR O COMENTAR EL BOOT SI TIENE EVENTOS AUTOMÁTICOS
+    // Ya que ahora manejamos el stock manualmente en el controller
+    /*
     protected static function boot()
     {
         parent::boot();
-
-        // Al CREAR insumo, descontar stock
-        static::created(function ($insumo) {
-            $producto = Producto::find($insumo->id_producto);
+        
+        static::created(function ($detalle) {
+            $producto = Producto::find($detalle->id_producto);
             if ($producto) {
-                $producto->descontarStock($insumo->insumo_cantidad);
+                $producto->decrement('pro_stock', $detalle->insumo_cantidad);
             }
         });
-
-        // Al ELIMINAR insumo, devolver stock
-        static::deleted(function ($insumo) {
-            $producto = Producto::find($insumo->id_producto);
+        
+        static::deleted(function ($detalle) {
+            $producto = Producto::find($detalle->id_producto);
             if ($producto) {
-                $producto->devolverStock($insumo->insumo_cantidad);
-            }
-        });
-
-        // Al ACTUALIZAR cantidad, ajustar stock
-        static::updated(function ($insumo) {
-            if ($insumo->isDirty('insumo_cantidad')) {
-                $original = $insumo->getOriginal('insumo_cantidad');
-                $nueva = $insumo->insumo_cantidad;
-                $diferencia = $original - $nueva;
-                
-                $producto = Producto::find($insumo->id_producto);
-                if ($producto) {
-                    if ($diferencia > 0) {
-                        $producto->devolverStock(abs($diferencia));
-                    } elseif ($diferencia < 0) {
-                        $producto->descontarStock(abs($diferencia));
-                    }
-                }
+                $producto->increment('pro_stock', $detalle->insumo_cantidad);
             }
         });
     }
+    */
 }
