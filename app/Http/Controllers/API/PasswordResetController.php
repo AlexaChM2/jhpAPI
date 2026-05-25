@@ -223,118 +223,103 @@ class PasswordResetController extends Controller
      * Resetear contraseña
      * POST /api/password-reset/reset
      */
-    public function resetPassword(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'token' => 'required|string',
-                'password' => 'required|string|min:6|confirmed',
-            ], [
-                'password.confirmed' => 'Las contraseñas no coinciden',
-                'password.min' => 'La contraseña debe tener al menos 6 caracteres',
-            ]);
+    // Agrega esta validación para aceptar email o correo
+public function resetPassword(Request $request)
+{
+    try {
+        $validator = Validator::make($request->all(), [
+            'token' => 'required|string',
+            'password' => 'required|string|min:6|confirmed',
+        ], [
+            'password.confirmed' => 'Las contraseñas no coinciden',
+            'password.min' => 'La contraseña debe tener al menos 6 caracteres',
+        ]);
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validación fallida',
-                    'errors' => $validator->errors(),
-                ], 422);
-            }
-
-            $passwordReset = PasswordReset::obtenerPorToken($request->token);
-
-            if (!$passwordReset) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Token inválido o expirado',
-                ], 400);
-            }
-
-            // Validar que no sea expirado
-            if (!$passwordReset->esValido()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'El token ha expirado',
-                ], 400);
-            }
-
-            $correo = $passwordReset->correo;
-            $usuarioModel = $this->findPasswordResetUser($correo);
-
-            if (!$usuarioModel) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no encontrado',
-                ], 404);
-            }
-
-            // Actualizar contraseña según el tipo de usuario
-            try {
-                $hashedPassword = Hash::make($request->password);
-                
-                // Cliente
-                if ($usuarioModel instanceof Cliente) {
-                    $usuarioModel->cli_password = $hashedPassword;
-                    $usuarioModel->save();
-                }
-                // Empleado
-                elseif ($usuarioModel instanceof Empleado) {
-                    $usuarioModel->emp_password = $hashedPassword;
-                    $usuarioModel->save();
-                }
-                // Usuario
-                elseif ($usuarioModel instanceof Usuario) {
-                    $usuarioModel->password = $hashedPassword;
-                    $usuarioModel->save();
-                }
-                // User
-                elseif ($usuarioModel instanceof User) {
-                    $usuarioModel->password = $hashedPassword;
-                    $usuarioModel->save();
-                }
-                // Fallback: actualizar directamente en la tabla correspondiente
-                else {
-                    // Intentar actualizar en clientes
-                    $updated = Cliente::where('cli_correo', $correo)
-                        ->update(['cli_password' => $hashedPassword]);
-                    
-                    // Si no se actualizó, intentar en empleados
-                    if (!$updated) {
-                        $updated = Empleado::where('emp_correo', $correo)
-                            ->update(['emp_password' => $hashedPassword]);
-                    }
-                    
-                    // Si no se actualizó, intentar en usuarios
-                    if (!$updated) {
-                        Usuario::where('correo', $correo)
-                            ->update(['password' => $hashedPassword]);
-                    }
-                }
-            } catch (\Exception $e) {
-                \Log::error('Error actualizando contraseña: ' . $e->getMessage());
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Error actualizando la contraseña',
-                ], 500);
-            }
-
-            // Marcar token como utilizado
-            $passwordReset->marcarUtilizado();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Contraseña actualizada exitosamente',
-            ], 200);
-
-        } catch (\Exception $e) {
-            \Log::error('Error en resetPassword: ' . $e->getMessage());
+        if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error: ' . $e->getMessage(),
+                'message' => 'Validación fallida',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $passwordReset = PasswordReset::obtenerPorToken($request->token);
+
+        if (!$passwordReset) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Token inválido o expirado',
+            ], 400);
+        }
+
+        // Validar que no sea expirado
+        if (!$passwordReset->esValido()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El token ha expirado',
+            ], 400);
+        }
+
+        // Obtener el correo del token
+        $correo = $passwordReset->correo;
+        
+        // Si el request tiene email, usarlo para verificar coincidencia
+        if ($request->has('email') && $request->email !== $correo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El correo no coincide con el token',
+            ], 400);
+        }
+        
+        $usuarioModel = $this->findPasswordResetUser($correo);
+
+        if (!$usuarioModel) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Usuario no encontrado',
+            ], 404);
+        }
+
+        // Actualizar contraseña
+        try {
+            $hashedPassword = Hash::make($request->password);
+            
+            if ($usuarioModel instanceof Cliente) {
+                $usuarioModel->cli_password = $hashedPassword;
+                $usuarioModel->save();
+            } elseif ($usuarioModel instanceof Empleado) {
+                $usuarioModel->emp_password = $hashedPassword;
+                $usuarioModel->save();
+            } elseif ($usuarioModel instanceof Usuario) {
+                $usuarioModel->password = $hashedPassword;
+                $usuarioModel->save();
+            } elseif ($usuarioModel instanceof User) {
+                $usuarioModel->password = $hashedPassword;
+                $usuarioModel->save();
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error actualizando contraseña: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error actualizando la contraseña',
             ], 500);
         }
+
+        $passwordReset->marcarUtilizado();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Contraseña actualizada exitosamente',
+        ], 200);
+
+    } catch (\Exception $e) {
+        \Log::error('Error en resetPassword: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error: ' . $e->getMessage(),
+        ], 500);
     }
+}
 
     /**
      * Cambiar contraseña (usuario autenticado)
