@@ -1,5 +1,18 @@
 <?php
 
+// ==========================================
+// AGREGAR HEADERS CORS GLOBALES
+// ==========================================
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-CSRF-TOKEN');
+header('Access-Control-Max-Age: 86400');
+
+// Manejar solicitudes OPTIONS preflight
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
 
 use App\Http\Controllers\API\ClimaController;
 use Illuminate\Support\Facades\Route;
@@ -59,8 +72,11 @@ Route::prefix('auth')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::prefix('password-reset')->group(function () {
+    Route::options('request', function() { return response('', 200); });
     Route::post('request', [PasswordResetController::class, 'requestReset']);
+    Route::options('validate-token', function() { return response('', 200); });
     Route::post('validate-token', [PasswordResetController::class, 'validateToken']);
+    Route::options('reset', function() { return response('', 200); });
     Route::post('reset', [PasswordResetController::class, 'resetPassword']);
     Route::post('change', [PasswordResetController::class, 'changePassword'])->middleware('auth:sanctum');
 });
@@ -149,6 +165,3 @@ use App\Http\Controllers\API\MarcaController;
 Route::get('marcas/activas', [MarcaController::class, 'activas']);  // ← PRIMERO
 Route::apiResource('marcas', MarcaController::class);              // ← DESPUÉS
 Route::patch('marcas/{id}/toggle', [MarcaController::class, 'toggleEstado']);
-
-
-
