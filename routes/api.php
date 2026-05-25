@@ -1,7 +1,7 @@
 <?php
 
 // ==========================================
-// RUTA DE PRUEBA MANUAL PARA PASSWORD-RESET
+// PRIMERO: RUTA DE PRUEBA MANUAL PARA PASSWORD-RESET
 // ==========================================
 Route::post('/password-reset/request', function() {
     return response()->json([
@@ -15,9 +15,8 @@ Route::post('/password-reset/request', function() {
 });
 
 // ==========================================
-// RESTO DE RUTAS ORIGINALES
+// RESTO DE IMPORTS
 // ==========================================
-
 use App\Http\Controllers\API\ClimaController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\CategoriasController;
@@ -72,7 +71,7 @@ Route::prefix('auth')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| Rutas de Recuperación de Contraseña (Públicas) - COMENTADAS TEMPORALMENTE
+| Rutas de Recuperación de Contraseña (COMENTADAS - USAMOS LA RUTA MANUAL)
 |--------------------------------------------------------------------------
 */
 // Route::prefix('password-reset')->group(function () {
