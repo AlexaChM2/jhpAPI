@@ -13,9 +13,6 @@ use Illuminate\Support\Facades\Mail;
 
 class PasswordResetController extends Controller
 {
-    /**
-     * Solicitar recuperación de contraseña - CON ENVÍO DE CORREO (TEXTO PLANO)
-     */
     public function requestReset(Request $request)
     {
         try {
@@ -33,10 +30,9 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
-            // Buscar el usuario
+            // Buscar usuario
             $usuario = Cliente::where('cli_correo', $request->correo)->first();
             $tipo = 'cliente';
-            $nombre = '';
             
             if (!$usuario) {
                 $usuario = Empleado::where('emp_correo', $request->correo)->first();
@@ -50,15 +46,14 @@ class PasswordResetController extends Controller
                 ], 200);
             }
 
-            // Obtener datos
             $userId = ($tipo === 'cliente') ? $usuario->id_cliente : $usuario->id_empleados;
             $email = ($tipo === 'cliente') ? $usuario->cli_correo : $usuario->emp_correo;
             $nombre = ($tipo === 'cliente') ? $usuario->cli_nombre : $usuario->emp_nombre;
 
-            // Crear token
+            // Generar token
             $token = hash('sha256', \Illuminate\Support\Str::random(60));
 
-            // Guardar en la tabla
+            // Guardar en BD
             PasswordReset::create([
                 'id_usuario' => $userId,
                 'token' => $token,
@@ -69,63 +64,46 @@ class PasswordResetController extends Controller
             ]);
 
             // ==========================================
-            // ENVIAR CORREO EN TEXTO PLANO (SIN VISTA BLADE)
+            // ENVIAR CORREO EN TEXTO PLANO
             // ==========================================
-            try {
-                $frontendUrl = rtrim(env('FRONTEND_URL', 'https://jhp-frontend-production.up.railway.app'), '/');
-                $resetUrl = $frontendUrl . '/reset-password.html?token=' . urlencode($token) . '&email=' . urlencode($email);
-                
-                $mensaje = "=========================================\n";
-                $mensaje .= "🔐 RECUPERACIÓN DE CONTRASEÑA - JHP MOTOS POS\n";
-                $mensaje .= "=========================================\n\n";
-                $mensaje .= "Hola $nombre,\n\n";
-                $mensaje .= "Recibimos una solicitud para restablecer la contraseña de tu cuenta.\n\n";
-                $mensaje .= "Para crear una nueva contraseña, haz clic en el siguiente enlace:\n";
-                $mensaje .= "$resetUrl\n\n";
-                $mensaje .= "O usa este token de recuperación: $token\n\n";
-                $mensaje .= "=========================================\n";
-                $mensaje .= "⚠️ IMPORTANTE:\n";
-                $mensaje .= "- Este enlace expirará en 24 horas\n";
-                $mensaje .= "- Si no solicitaste este cambio, ignora este mensaje\n";
-                $mensaje .= "- Tu contraseña permanecerá igual\n";
-                $mensaje .= "=========================================\n\n";
-                $mensaje .= "© " . date('Y') . " JHP Motos POS - Sistema de Gestión de Motocicletas\n";
-                
-                Mail::raw($mensaje, function($message) use ($email) {
-                    $message->to($email)
-                            ->subject('Recuperación de Contraseña - JHP Motos POS')
-                            ->from(env('MAIL_FROM_ADDRESS', 'no-reply@jhpmotos.com'), 'JHP Motos POS');
-                });
-                
-                \Log::info('Correo enviado a: ' . $email);
-                
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Hemos enviado las instrucciones de recuperación a tu correo electrónico',
-                ], 200);
-                
-            } catch (\Exception $mailException) {
-                \Log::error('Error enviando email: ' . $mailException->getMessage());
-                
-                // Si falla el envío, devolvemos el token para pruebas
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Token generado pero no se pudo enviar el correo. Error: ' . $mailException->getMessage(),
-                    'data' => [
-                        'token' => $token,
-                        'correo' => $email,
-                    ]
-                ], 200);
-            }
+            $frontendUrl = rtrim(env('FRONTEND_URL', 'https://jhp-frontend-production.up.railway.app'), '/');
+            $resetUrl = $frontendUrl . '/reset-password.html?token=' . urlencode($token) . '&email=' . urlencode($email);
+            
+            $contenido = "=========================================\n";
+            $contenido .= "🔐 RECUPERACIÓN DE CONTRASEÑA\n";
+            $contenido .= "=========================================\n\n";
+            $contenido .= "Hola $nombre,\n\n";
+            $contenido .= "Recibimos una solicitud para restablecer tu contraseña.\n\n";
+            $contenido .= "Para crear una nueva contraseña, haz clic en este enlace:\n";
+            $contenido .= "$resetUrl\n\n";
+            $contenido .= "O usa este token: $token\n\n";
+            $contenido .= "Este enlace expirará en 24 horas.\n\n";
+            $contenido .= "Si no solicitaste esto, ignora este mensaje.\n";
+            $contenido .= "=========================================\n";
+            
+            Mail::raw($contenido, function($message) use ($email) {
+                $message->to($email)
+                        ->subject('Recuperación de Contraseña - JHP Motos POS')
+                        ->from(env('MAIL_FROM_ADDRESS', 'no-reply@jhpmotos.com'), 'JHP Motos POS');
+            });
+            
+            \Log::info('Correo enviado a: ' . $email);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Hemos enviado las instrucciones de recuperación a tu correo electrónico',
+            ], 200);
 
         } catch (\Exception $e) {
-            \Log::error('Error en requestReset: ' . $e->getMessage() . ' - Línea: ' . $e->getLine());
+            \Log::error('Error en requestReset: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error: ' . $e->getMessage(),
             ], 500);
         }
     }
+
+    // Mantén los demás métodos (resetPassword, validateToken, changePassword) igual...
 
     /**
      * Resetear contraseña
