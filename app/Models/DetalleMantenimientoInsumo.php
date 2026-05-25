@@ -17,6 +17,13 @@ class DetalleMantenimientoInsumo extends Model
         'insumo_precio_unitario'
     ];
 
+    // DESACTIVAR TODOS LOS EVENTOS DEL MODELO
+    public $dispatchesEvents = [];
+    
+    protected $observables = [];
+    
+    protected static $events = [];
+
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto', 'id_producto');
@@ -27,9 +34,18 @@ class DetalleMantenimientoInsumo extends Model
         return $this->belongsTo(Mantenimiento::class, 'id_mantenimiento', 'id_mantenimiento');
     }
 
-    // ❌ SIN EVENTOS AUTOMÁTICOS - Stock se maneja en Controller
+    // FORZAR sin eventos
     protected static function boot()
     {
         parent::boot();
+        
+        // Eliminar explícitamente cualquier evento registrado
+        static::flushEventListeners();
+    }
+    
+    // Sobrescribir para que NUNCA dispare eventos
+    protected static function booted()
+    {
+        // Vacío intencionalmente
     }
 }

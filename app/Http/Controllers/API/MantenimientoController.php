@@ -40,9 +40,6 @@ class MantenimientoController extends Controller
         ], 200);
     }
 
-    /**
-     * CREAR - Stock se descuenta AQUÍ (UNA SOLA VEZ)
-     */
     public function store(Request $request)
     {
         $request->validate([
@@ -115,19 +112,28 @@ class MantenimientoController extends Controller
                 'estado_servicio' => $request->estado_servicio ?? 'En Proceso',
             ]);
 
-            // 4. Registrar insumos y DESCONTAR stock (UNA VEZ)
+            // 4. Registrar insumos y DESCONTAR stock
             if ($request->has('insumos') && count($request->insumos) > 0) {
                 foreach ($request->insumos as $insumo) {
-                    DetalleMantenimientoInsumo::create([
+                    // Usar insert directo SIN eventos del modelo
+                    DB::table('detalle_mantenimiento_insumos')->insert([
                         'id_mantenimiento' => $mantenimiento->id_mantenimiento,
                         'id_producto' => $insumo['id_producto'],
                         'insumo_cantidad' => $insumo['insumo_cantidad'],
                         'insumo_precio_unitario' => $insumo['insumo_precio_unitario'],
                     ]);
 
-                    // DESCONTAR STOCK (única vez)
-                    Producto::where('id_producto', $insumo['id_producto'])
-                        ->decrement('pro_stock', $insumo['insumo_cantidad']);
+                    // LOG para debug
+                    $prodAntes = Producto::find($insumo['id_producto']);
+                    Log::info("🔍 STORE - ANTES: {$prodAntes->pro_nombre} stock={$prodAntes->pro_stock}, descuento={$insumo['insumo_cantidad']}");
+
+                    // Descontar stock con update directo
+                    DB::table('producto')
+                        ->where('id_producto', $insumo['id_producto'])
+                        ->update(['pro_stock' => DB::raw("pro_stock - {$insumo['insumo_cantidad']}")]);
+
+                    $prodDespues = Producto::find($insumo['id_producto']);
+                    Log::info("🔍 STORE - DESPUÉS: {$prodDespues->pro_nombre} stock={$prodDespues->pro_stock}");
                 }
             }
 
@@ -168,9 +174,6 @@ class MantenimientoController extends Controller
         }
     }
 
-    /**
-     * ACTUALIZAR - Repone stock viejo, descuenta stock nuevo
-     */
     public function update(Request $request, $id)
     {
         $request->validate([
@@ -192,24 +195,26 @@ class MantenimientoController extends Controller
             DB::beginTransaction();
 
             $mantenimiento = Mantenimiento::findOrFail($id);
-
-            // Actualizar datos básicos
             $mantenimiento->update($request->only([
                 'id_mecanico', 'moto_modelo', 'moto_llegada_descripcion',
                 'trabajo_realizado', 'fecha_inicio', 'fecha_termino', 'estado_servicio'
             ]));
 
-            // Procesar insumos (si vienen en el request)
             if ($request->has('insumos')) {
                 // 1. REPONER stock de insumos viejos
                 $insumosViejos = DetalleMantenimientoInsumo::where('id_mantenimiento', $id)->get();
                 foreach ($insumosViejos as $viejo) {
-                    Producto::where('id_producto', $viejo->id_producto)
-                        ->increment('pro_stock', $viejo->insumo_cantidad);
+                    DB::table('producto')
+                        ->where('id_producto', $viejo->id_producto)
+                        ->update(['pro_stock' => DB::raw("pro_stock + {$viejo->insumo_cantidad}")]);
+                    
+                    Log::info("🔄 UPDATE REPONER: Producto #{$viejo->id_producto} +{$viejo->insumo_cantidad}");
                 }
 
-                // 2. Eliminar insumos viejos
-                DetalleMantenimientoInsumo::where('id_mantenimiento', $id)->delete();
+                // 2. Eliminar insumos viejos (usando DB directo para evitar eventos)
+                DB::table('detalle_mantenimiento_insumos')
+                    ->where('id_mantenimiento', $id)
+                    ->delete();
 
                 // 3. Validar stock para nuevos
                 foreach ($request->insumos as $insumo) {
@@ -217,8 +222,9 @@ class MantenimientoController extends Controller
                     if ($producto && $producto->pro_stock < $insumo['insumo_cantidad']) {
                         // Revertir reposición
                         foreach ($insumosViejos as $viejo) {
-                            Producto::where('id_producto', $viejo->id_producto)
-                                ->decrement('pro_stock', $viejo->insumo_cantidad);
+                            DB::table('producto')
+                                ->where('id_producto', $viejo->id_producto)
+                                ->update(['pro_stock' => DB::raw("pro_stock - {$viejo->insumo_cantidad}")]);
                         }
                         DB::rollBack();
                         return response()->json([
@@ -230,19 +236,21 @@ class MantenimientoController extends Controller
 
                 // 4. Crear nuevos y descontar
                 foreach ($request->insumos as $insumo) {
-                    DetalleMantenimientoInsumo::create([
+                    DB::table('detalle_mantenimiento_insumos')->insert([
                         'id_mantenimiento' => $id,
                         'id_producto' => $insumo['id_producto'],
                         'insumo_cantidad' => $insumo['insumo_cantidad'],
                         'insumo_precio_unitario' => $insumo['insumo_precio_unitario'],
                     ]);
 
-                    Producto::where('id_producto', $insumo['id_producto'])
-                        ->decrement('pro_stock', $insumo['insumo_cantidad']);
+                    DB::table('producto')
+                        ->where('id_producto', $insumo['id_producto'])
+                        ->update(['pro_stock' => DB::raw("pro_stock - {$insumo['insumo_cantidad']}")]);
+                    
+                    Log::info("📦 UPDATE DESCONTAR: Producto #{$insumo['id_producto']} -{$insumo['insumo_cantidad']}");
                 }
             }
 
-            // Procesar servicios
             if ($request->has('servicios')) {
                 Detalle_mantenimiento_servicios::where('id_mantenimiento', $id)->delete();
                 foreach ($request->servicios as $servicio) {
@@ -255,7 +263,8 @@ class MantenimientoController extends Controller
             }
 
             // Recalcular total
-            $total_insumos = DetalleMantenimientoInsumo::where('id_mantenimiento', $id)
+            $total_insumos = DB::table('detalle_mantenimiento_insumos')
+                ->where('id_mantenimiento', $id)
                 ->selectRaw('COALESCE(SUM(insumo_cantidad * insumo_precio_unitario), 0) as total')
                 ->value('total') ?? 0;
 
@@ -270,7 +279,7 @@ class MantenimientoController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Mantenimiento actualizado. Stock ajustado.',
+                'message' => 'Mantenimiento actualizado.',
                 'data' => $mantenimiento
             ], 200);
 
@@ -284,22 +293,19 @@ class MantenimientoController extends Controller
         }
     }
 
-    /**
-     * ELIMINAR - Repone stock
-     */
     public function destroy($id)
     {
         try {
             DB::beginTransaction();
 
-            // Reponer stock
             $insumos = DetalleMantenimientoInsumo::where('id_mantenimiento', $id)->get();
             foreach ($insumos as $insumo) {
-                Producto::where('id_producto', $insumo->id_producto)
-                    ->increment('pro_stock', $insumo->insumo_cantidad);
+                DB::table('producto')
+                    ->where('id_producto', $insumo->id_producto)
+                    ->update(['pro_stock' => DB::raw("pro_stock + {$insumo->insumo_cantidad}")]);
             }
 
-            DetalleMantenimientoInsumo::where('id_mantenimiento', $id)->delete();
+            DB::table('detalle_mantenimiento_insumos')->where('id_mantenimiento', $id)->delete();
             Detalle_mantenimiento_servicios::where('id_mantenimiento', $id)->delete();
             Mantenimiento::destroy($id);
 
@@ -307,7 +313,7 @@ class MantenimientoController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Mantenimiento eliminado. Stock devuelto.'
+                'message' => 'Mantenimiento eliminado.'
             ], 200);
 
         } catch (\Exception $e) {
