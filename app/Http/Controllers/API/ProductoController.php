@@ -69,7 +69,7 @@ class ProductoController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'pro_codigo' => 'required|string|max:50|unique:Producto,pro_codigo',
+            'pro_codigo' => 'required|string|max:50|unique:producto,pro_codigo',
             'pro_nombre' => 'required|string|max:100',
             'pro_tipo' => 'nullable|string|max:50',
             'pro_marca' => 'nullable|string|max:50',
@@ -77,8 +77,8 @@ class ProductoController extends Controller
             'pro_descripcion' => 'nullable|string',
             'pro_precio_venta' => 'required|numeric|min:0',
             'pro_stock' => 'nullable|integer|min:0',
-            'id_categoria' => 'nullable|exists:Categorias,id_categoria',
-            'id_proveedor' => 'nullable|exists:Proveedores,id_proveedor',
+            'id_categoria' => 'nullable|exists:categorias,id_categoria',
+            'id_proveedor' => 'nullable|exists:proveedores,id_proveedor',
         ], [
             'pro_codigo.required' => 'El código del producto es obligatorio',
             'pro_codigo.unique' => 'Este código ya existe',
@@ -146,7 +146,7 @@ class ProductoController extends Controller
                 'sometimes',
                 'string',
                 'max:50',
-                Rule::unique('Producto', 'pro_codigo')->ignore($id, 'id_producto'),
+                Rule::unique('producto', 'pro_codigo')->ignore($id, 'id_producto'),
             ],
             'pro_nombre' => 'sometimes|string|max:100',
             'pro_tipo' => 'nullable|string|max:50',
@@ -155,8 +155,8 @@ class ProductoController extends Controller
             'pro_descripcion' => 'nullable|string',
             'pro_precio_venta' => 'sometimes|numeric|min:0',
             'pro_stock' => 'nullable|integer|min:0',
-            'id_categoria' => 'nullable|exists:Categorias,id_categoria',
-            'id_proveedor' => 'nullable|exists:Proveedores,id_proveedor',
+            'id_categoria' => 'nullable|exists:categorias,id_categoria',
+            'id_proveedor' => 'nullable|exists:proveedores,id_proveedor',
         ], [
             'id_marca.exists' => 'La marca seleccionada no existe',  // ← NUEVO
         ]);
