@@ -41,7 +41,7 @@ class CotizacionesController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'id_cliente' => 'required|exists:Clientes,id_cliente',
+            'id_cliente' => 'required|exists:clientes,id_cliente',
             'cot_vigencia_dias' => 'nullable|integer|min:1|max:90',
             'cot_total' => 'required|numeric|min:0',
             'detalles' => 'required|array|min:1',
@@ -136,7 +136,7 @@ class CotizacionesController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'id_cliente' => 'required|exists:Clientes,id_cliente',
+            'id_cliente' => 'required|exists:clientes,id_cliente',
             'cot_vigencia_dias' => 'nullable|integer|min:1|max:90',
             'cot_total' => 'required|numeric|min:0',
             'detalles' => 'required|array|min:1',
